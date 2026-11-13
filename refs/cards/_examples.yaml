@@ -1,0 +1,131 @@
+# 示例卡（v0.1）—— 1 张作品卡 + 4 张角色卡
+# 字段定义见 refs/README.md
+
+- type: work
+  id: W-0001
+  title: 道诡异仙
+  alias: []
+  author: 狐尾的笔
+  medium: webnovel
+  year: 起点中文网连载（年份待核）
+  sources:
+    - http://www.chinawriter.com.cn/n1/2023/0824/c404027-40063013.html
+  logline: 一个分不清现实与幻觉的大学生，在精神病院与诡异修仙世界之间求生。
+  world: 现代都市 + 诡异修仙世界，道教/民俗符号密集。
+  anomaly_rules: 世界是否真实不可判定；「心素」会被多方觊觎；成仙本身就是陷阱。
+  horror_engine: [cognition, body, folk]
+  narrative_structure: 双世界 / 不可靠叙述 / 碎片考据
+  cast: [C-0001]
+  motifs: [M-0001]
+  transferable: 界面说谎、污染值、双世界切换、命格「心素」
+  risk: 版权（小说改编权）；同质化（中式克苏鲁网文多）
+  tags: [webnovel, cognition, "system_map:fate", "system_map:pollution"]
+  status: analyzed
+
+- type: character
+  id: C-0001
+  name: 李火旺
+  alias: [火旺]
+  source: {work_id: W-0001, title: 道诡异仙, author: 狐尾的笔, medium: webnovel}
+  identity: 大学生 / 精神病患者 / 心素持有者
+  affiliation: 无固定阵营（被多方争夺）
+  era_place: 现代都市 + 诡异修仙世界
+  story_role: protagonist
+  anomaly_relation: vessel
+  desire: 活下去，弄清哪个世界才是真的
+  fear: 分不清现实与幻觉，被当成疯子
+  secret: 他的「幻觉」可能比现实更真（不可靠叙述）
+  ability: 心素体质——所见所闻会反噬，也会被他人觊觎
+  cost: 认知污染、身体损害、身边人不断死去
+  signature: 在精神病院与修仙世界之间来回「跳」
+  visual_motif: [医院白墙, 道袍, 血]
+  audio_motif: [耳鸣, 诵经, 心跳]
+  transferable: 命格「心素」：开局能看到别人看不到的东西；污染高时 UI 文本说谎
+  adapt_score: 5
+  risk: 版权（小说改编权）
+  tags: [webnovel, cognition, vessel, fog, "system_map:fate", "system_map:pollution"]
+  sources: [http://www.chinawriter.com.cn/n1/2023/0824/c404027-40063013.html]
+  status: analyzed
+  updated: 2026-11-13
+  lesson: 不可靠叙述可以做成「界面会说谎」的机制，而不是只做剧情。
+
+- type: character
+  id: C-0002
+  name: 谢亚理
+  alias: []
+  source: {work_id: W-0002, title: 双瞳, author: 陈国富, medium: film}
+  identity: 双胞胎姐妹（幸存者）/ 真仙观修行者 / 「成仙」容器
+  affiliation: 真仙观
+  era_place: 2002 台北
+  story_role: antagonist
+  anomaly_relation: sacrifice
+  desire: 完成渡劫、成仙
+  fear: 渡劫失败、无法离开这一世
+  secret: 所谓成仙，需要他人性命与一场献祭
+  ability: 道教成仙术 + 真菌/幻觉（霉菌钢珠）
+  cost: 身体损坏，靠他人性命与真菌维持
+  signature: 道观里的「飞升」，与刑警黄火土的最后对峙
+  visual_motif: [双瞳, 道观, 霉菌, 水]
+  audio_motif: [诵经, 金属珠滚动]
+  transferable: BOSS「渡劫者」：她要在你身上完成仪式，不能硬打，只能破它的规矩
+  adapt_score: 4
+  risk: 版权（电影）；宗教表达敏感
+  tags: [film, body, folk, antagonist, sacrifice, temple, "system_map:rule"]
+  sources: [https://movie.douban.com/review/9332301/]
+  status: analyzed
+  updated: 2026-11-13
+  lesson: 反派不需要「邪恶」，她只需要一个自洽的成仙逻辑，恐怖就成立了。
+
+- type: character
+  id: C-0003
+  name: 杜丰于
+  alias: []
+  source: {work_id: W-0003, title: 还愿, author: 赤烛游戏, medium: game}
+  identity: 过气剧作家 / 父亲
+  affiliation: 杜家 / 慈孤坛信众
+  era_place: 1980 年代台湾
+  story_role: protagonist
+  anomaly_relation: believer
+  desire: 让女儿病好，保住面子与事业
+  fear: 失败、被人看不起、失去女儿
+  secret: 他亲手把女儿交给慈孤观音
+  ability: 无（普通人）；会写故事、编故事
+  cost: 迷信的代价由全家承担
+  signature: 在空屋里一遍遍重演家庭记忆
+  visual_motif: [神坛, 符水, 旧公寓, 红]
+  audio_motif: [诵经, 电视杂音, 雨]
+  transferable: NPC「执念父亲」：普通人如何一步步走进邪教；事件链设计模板
+  adapt_score: 4
+  risk: 版权（赤烛）；邪教/宗教敏感
+  tags: [game, family, folk, protagonist, believer, talisman, "system_map:narrative"]
+  sources: [https://www.marieclaire.com.tw/lifestyle/whats-hot/40929]
+  status: analyzed
+  updated: 2026-11-13
+  lesson: 玩家扮演「加害者」比扮演「调查员」更不安。
+
+- type: character
+  id: C-0004
+  name: 慈孤观音
+  alias: [私佛]
+  source: {work_id: W-0003, title: 还愿, author: 赤烛游戏, medium: game}
+  identity: 私坛供奉的「私佛」/ 交易型存在
+  affiliation: 慈孤坛（何老师）
+  era_place: 1980 年代台湾
+  story_role: rule-incarnate
+  anomaly_relation: contract
+  desire: 香火、供奉与「还愿」
+  fear: 无人供奉
+  secret: 「还愿」真正的代价是什么，信众并不知道
+  ability: 显灵、治病、附身（一切都要交易）
+  cost: 供奉者付出家人、身体与记忆
+  signature: 慈孤观音像与坛前的「还愿」
+  visual_motif: [神像, 香灰, 红布, 暗室]
+  audio_motif: [木鱼, 诵经, 低语]
+  transferable: 规则怪谈式 BOSS：打不过，只能按它的规矩「还愿」；违规则触发事件
+  adapt_score: 5
+  risk: 宗教敏感；版权（赤烛）
+  tags: [game, rule, folk, rule-incarnate, contract, incense, "system_map:rule"]
+  sources: [https://www.marieclaire.com.tw/lifestyle/whats-hot/40929]
+  status: analyzed
+  updated: 2026-11-13
+  lesson: 好的克苏鲁 BOSS 不是「血条」，是一套你不得不遵守的规矩。
