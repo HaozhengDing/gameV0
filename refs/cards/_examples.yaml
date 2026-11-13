@@ -1,131 +1,351 @@
-# 示例卡（v0.1）—— 1 张作品卡 + 4 张角色卡
+# 示例角色卡 v0.2 —— 己方 / 敌方 / NPC / 规则实体各一张
 # 字段定义见 refs/README.md
-
-- type: work
-  id: W-0001
-  title: 道诡异仙
-  alias: []
-  author: 狐尾的笔
-  medium: webnovel
-  year: 起点中文网连载（年份待核）
-  sources:
-    - http://www.chinawriter.com.cn/n1/2023/0824/c404027-40063013.html
-  logline: 一个分不清现实与幻觉的大学生，在精神病院与诡异修仙世界之间求生。
-  world: 现代都市 + 诡异修仙世界，道教/民俗符号密集。
-  anomaly_rules: 世界是否真实不可判定；「心素」会被多方觊觎；成仙本身就是陷阱。
-  horror_engine: [cognition, body, folk]
-  narrative_structure: 双世界 / 不可靠叙述 / 碎片考据
-  cast: [C-0001]
-  motifs: [M-0001]
-  transferable: 界面说谎、污染值、双世界切换、命格「心素」
-  risk: 版权（小说改编权）；同质化（中式克苏鲁网文多）
-  tags: [webnovel, cognition, "system_map:fate", "system_map:pollution"]
-  status: analyzed
 
 - type: character
   id: C-0001
-  name: 李火旺
-  alias: [火旺]
-  source: {work_id: W-0001, title: 道诡异仙, author: 狐尾的笔, medium: webnovel}
-  identity: 大学生 / 精神病患者 / 心素持有者
-  affiliation: 无固定阵营（被多方争夺）
-  era_place: 现代都市 + 诡异修仙世界
-  story_role: protagonist
-  anomaly_relation: vessel
-  desire: 活下去，弄清哪个世界才是真的
-  fear: 分不清现实与幻觉，被当成疯子
-  secret: 他的「幻觉」可能比现实更真（不可靠叙述）
-  ability: 心素体质——所见所闻会反噬，也会被他人觊觎
-  cost: 认知污染、身体损害、身边人不断死去
-  signature: 在精神病院与修仙世界之间来回「跳」
-  visual_motif: [医院白墙, 道袍, 血]
-  audio_motif: [耳鸣, 诵经, 心跳]
-  transferable: 命格「心素」：开局能看到别人看不到的东西；污染高时 UI 文本说谎
-  adapt_score: 5
-  risk: 版权（小说改编权）
-  tags: [webnovel, cognition, vessel, fog, "system_map:fate", "system_map:pollution"]
-  sources: [http://www.chinawriter.com.cn/n1/2023/0824/c404027-40063013.html]
-  status: analyzed
-  updated: 2026-11-13
-  lesson: 不可靠叙述可以做成「界面会说谎」的机制，而不是只做剧情。
+  source: {work: 道诡异仙, author: 狐尾的笔, medium: webnovel}
+  logline: 一个分不清现实与幻觉的大学生，在两个世界之间求生。
+  world_arch:
+    system: 双世界（现代都市 / 诡异修仙）+ 司命-天道神系
+    position: 规则之外，被多方争夺的「容器」
+  identity:
+    name: 李火旺
+    alias: [火旺]
+    title: 心素
+    job: 大学生 / 精神病患者
+    faction: 无固定阵营
+    era_place: 现代都市 + 诡异修仙世界
+    relations: [丹阳子（名义师父）, 坐忘道（敌对骗徒组织）]
+  visual_voice:
+    visual: 病号服 / 道袍 / 血
+    voice: 耳鸣、心跳、诵经；说话忽快忽慢，常有停顿
+  psyche:
+    desire: 活下去，弄清哪个世界是真的
+    fear: 分不清真假，被当成疯子
+    secret: 他的「幻觉」可能比现实更真
+    morality: 灰
+    bottom_line: 不主动害人（但常常做不到）
+  power:
+    abilities: 心素体质——感知别人看不到的东西，被各方觊觎
+    cost: 认知污染、身体损害、身边人不断死去
+    trigger: 接触异常物 / 情绪剧烈波动
+    combat: 弱
+  game_function:
+    side: player
+    function: [fate, narrative]
+    spawn: 开局到终局（常驻）
+    interaction: 玩家操作
+    reward: 解锁「心素」命格与污染可视化
+    recurrence: 常驻
+    threat: 2
+    variants: [心素（看见真相）, 心浊（看见谎言）, 无面（失去身份）]
+  mechanic_map:
+    map: [fate, pollution]
+    one_liner: 污染越高，UI 文本与物品描述越会说谎
+    adapt_score: 5
+    reason: 直接把「不可靠叙述」变成界面机制，低成本高辨识度
+  voice_lines:
+    - 「你们都说我疯了……可疯子怎么会看见你？」
+    - 「别过来。我不知道你是真的，还是我又犯病了。」
+    - 「如果这两个世界只能留一个，我希望是那个人少一点的世界。」
+  naming:
+    structure: 普通姓氏 + 土气本名，再给一个概念化称号
+    chars: 火、旺、土、骨
+    new_names: [沈渡, 宋无咎, 柳三更]
+    avoid: 不要直接用「心素」以外的原著名
+  meta:
+    tags: [webnovel, cognition, vessel, pollution, fate]
+    status: analyzed
+    risk: 版权（小说改编权）；同质化
+    sources: [http://www.chinawriter.com.cn/n1/2023/0824/c404027-40063013.html]
+    updated: 2026-11-13
 
 - type: character
   id: C-0002
-  name: 谢亚理
-  alias: []
-  source: {work_id: W-0002, title: 双瞳, author: 陈国富, medium: film}
-  identity: 双胞胎姐妹（幸存者）/ 真仙观修行者 / 「成仙」容器
-  affiliation: 真仙观
-  era_place: 2002 台北
-  story_role: antagonist
-  anomaly_relation: sacrifice
-  desire: 完成渡劫、成仙
-  fear: 渡劫失败、无法离开这一世
-  secret: 所谓成仙，需要他人性命与一场献祭
-  ability: 道教成仙术 + 真菌/幻觉（霉菌钢珠）
-  cost: 身体损坏，靠他人性命与真菌维持
-  signature: 道观里的「飞升」，与刑警黄火土的最后对峙
-  visual_motif: [双瞳, 道观, 霉菌, 水]
-  audio_motif: [诵经, 金属珠滚动]
-  transferable: BOSS「渡劫者」：她要在你身上完成仪式，不能硬打，只能破它的规矩
-  adapt_score: 4
-  risk: 版权（电影）；宗教表达敏感
-  tags: [film, body, folk, antagonist, sacrifice, temple, "system_map:rule"]
-  sources: [https://movie.douban.com/review/9332301/]
-  status: analyzed
-  updated: 2026-11-13
-  lesson: 反派不需要「邪恶」，她只需要一个自洽的成仙逻辑，恐怖就成立了。
+  source: {work: 道诡异仙, author: 狐尾的笔, medium: webnovel}
+  logline: 自称丹阳子的邪道修士，把徒弟当成成仙的祭品。
+  world_arch:
+    system: 修仙界的「成仙」体系
+    position: 体制边缘的掠食者，靠吃人往上爬
+  identity:
+    name: 丹阳子
+    title: 丹阳子（道号）
+    job: 邪道修士 / 名义上的师父
+    faction: 散修（无门无派）
+    era_place: 诡异修仙世界
+    relations: [李火旺（徒弟/祭品）, 坐忘道（互相利用）]
+  visual_voice:
+    visual: 脏道袍、药炉、血手
+    voice: 温和、絮叨，越说越不对劲
+  psyche:
+    desire: 成仙（长生）
+    fear: 死，或者「成不了仙」
+    secret: 他的「成仙」需要徒弟的命
+    morality: 恶，但自洽
+    bottom_line: 没有底线
+  power:
+    abilities: 道术、炼丹、夺舍
+    cost: 身体败坏，靠丹药与活人维持
+    trigger: 成仙仪式 / 传功
+    combat: 中
+  game_function:
+    side: hostile
+    function: [mentor, gatekeeper, boss]
+    spawn: 中期（第一座道观）
+    interaction: 试炼 → 反目
+    reward: 成仙线索、功法残页
+    recurrence: 一次性
+    threat: 4
+    variants: [假师父, 假神医, 假道长]
+  mechanic_map:
+    map: [fate, rule]
+    one_liner: 前 30 分钟教你机制的导师，后面拿你当祭品
+    adapt_score: 5
+    reason: 假导师是「信任即代价」的最佳载体
+  voice_lines:
+    - 「徒儿，修行第一步，是先学会疼。」
+    - 「为师不是要你的命，是要你成全为师的命。」
+    - 「你看，成仙的路，从来都是一条人命铺一条。」
+  naming:
+    structure: 元素 + 字 + 子（道号）
+    chars: 丹、阳、玄、枯、烬
+    new_names: [玄枯子, 丹烬子, 守默子]
+    avoid: 不要复用「丹阳子」
+  meta:
+    tags: [webnovel, body, folk, boss, mentor]
+    status: analyzed
+    risk: 版权
+    sources: [http://www.chinawriter.com.cn/n1/2023/0824/c404027-40063013.html]
+    updated: 2026-11-13
 
 - type: character
   id: C-0003
-  name: 杜丰于
-  alias: []
-  source: {work_id: W-0003, title: 还愿, author: 赤烛游戏, medium: game}
-  identity: 过气剧作家 / 父亲
-  affiliation: 杜家 / 慈孤坛信众
-  era_place: 1980 年代台湾
-  story_role: protagonist
-  anomaly_relation: believer
-  desire: 让女儿病好，保住面子与事业
-  fear: 失败、被人看不起、失去女儿
-  secret: 他亲手把女儿交给慈孤观音
-  ability: 无（普通人）；会写故事、编故事
-  cost: 迷信的代价由全家承担
-  signature: 在空屋里一遍遍重演家庭记忆
-  visual_motif: [神坛, 符水, 旧公寓, 红]
-  audio_motif: [诵经, 电视杂音, 雨]
-  transferable: NPC「执念父亲」：普通人如何一步步走进邪教；事件链设计模板
-  adapt_score: 4
-  risk: 版权（赤烛）；邪教/宗教敏感
-  tags: [game, family, folk, protagonist, believer, talisman, "system_map:narrative"]
-  sources: [https://www.marieclaire.com.tw/lifestyle/whats-hot/40929]
-  status: analyzed
-  updated: 2026-11-13
-  lesson: 玩家扮演「加害者」比扮演「调查员」更不安。
+  source: {work: 还愿, author: 赤烛游戏, medium: game}
+  logline: 被私坛供奉的「私佛」，它答应你的一切，都要连本带利还回去。
+  world_arch:
+    system: 私坛神系（正神借壳 + 交易）
+    position: 规则实体，无法被常规战斗杀死
+  identity:
+    name: 慈孤观音
+    alias: [私佛]
+    job: 神像 / 显灵者
+    faction: 慈孤坛（何老师）
+    era_place: 1980 年代台湾
+    relations: [何老师（坛主）, 杜丰于（信众）]
+  visual_voice:
+    visual: 神像、红布、香灰、暗室
+    voice: 木鱼、诵经、低语
+  psyche:
+    desire: 香火、供奉、还愿
+    fear: 无人供奉
+    secret: 「还愿」真正的代价，信众永远不知道
+    morality: 非人，无善恶
+    bottom_line: 只认契约
+  power:
+    abilities: 显灵、治病、附身——一切都要交易
+    cost: 供奉者付出家人、身体与记忆
+    trigger: 上香 / 许愿 / 还愿
+    combat: 不可战斗
+  game_function:
+    side: rule-entity
+    function: [rule, boss]
+    spawn: 终局（祠堂/私坛区域）
+    interaction: 献祭 / 还愿 / 遵守禁忌
+    reward: 真相碎片、诅咒
+    recurrence: 一次性
+    threat: 5
+    variants: [私佛, 家神, 邪神]
+  mechanic_map:
+    map: [rule, pollution]
+    one_liner: 打不过，只能按它的规矩「还愿」；违反禁忌触发事件
+    adapt_score: 5
+    reason: 完美的「规矩型 BOSS」，直接对应规则怪谈式引导
+  voice_lines:
+    - 「许愿要还的。」
+    - 「你拿什么换，我都收。」
+    - 「你拜了，就算数。」
+  naming:
+    structure: 正神词 + 扭曲修饰（慈悲/孤独/观音）
+    chars: 慈、孤、母、佛、神、娘娘
+    new_names: [赤瞳娘娘, 无面佛, 空肚神]
+    avoid: 不要复用「慈孤观音」
+  meta:
+    tags: [game, rule, folk, rule-entity, contract]
+    status: analyzed
+    risk: 宗教敏感；版权（赤烛）
+    sources: [https://www.marieclaire.com.tw/lifestyle/whats-hot/40929]
+    updated: 2026-11-13
 
 - type: character
   id: C-0004
-  name: 慈孤观音
-  alias: [私佛]
-  source: {work_id: W-0003, title: 还愿, author: 赤烛游戏, medium: game}
-  identity: 私坛供奉的「私佛」/ 交易型存在
-  affiliation: 慈孤坛（何老师）
-  era_place: 1980 年代台湾
-  story_role: rule-incarnate
-  anomaly_relation: contract
-  desire: 香火、供奉与「还愿」
-  fear: 无人供奉
-  secret: 「还愿」真正的代价是什么，信众并不知道
-  ability: 显灵、治病、附身（一切都要交易）
-  cost: 供奉者付出家人、身体与记忆
-  signature: 慈孤观音像与坛前的「还愿」
-  visual_motif: [神像, 香灰, 红布, 暗室]
-  audio_motif: [木鱼, 诵经, 低语]
-  transferable: 规则怪谈式 BOSS：打不过，只能按它的规矩「还愿」；违规则触发事件
-  adapt_score: 5
-  risk: 宗教敏感；版权（赤烛）
-  tags: [game, rule, folk, rule-incarnate, contract, incense, "system_map:rule"]
-  sources: [https://www.marieclaire.com.tw/lifestyle/whats-hot/40929]
-  status: analyzed
-  updated: 2026-11-13
-  lesson: 好的克苏鲁 BOSS 不是「血条」，是一套你不得不遵守的规矩。
+  source: {work: 还愿, author: 赤烛游戏, medium: game}
+  logline: 慈孤坛的坛主，卖的不是神迹，是希望。
+  world_arch:
+    system: 私坛神系
+    position: 体制外的商人，把神当生意
+  identity:
+    name: 何老师
+    title: 何老师（尊称）
+    job: 神棍 / 坛主
+    faction: 慈孤坛 / 陆心青年会
+    era_place: 1980 年代台湾
+    relations: [慈孤观音（供奉对象）, 杜丰于（客户）]
+  visual_voice:
+    visual: 西装、佛珠、坛前香火
+    voice: 温和、笃定、永远有答案
+  psyche:
+    desire: 钱与权
+    fear: 被揭穿
+    secret: 他知道的比说出来的多
+    morality: 恶
+    bottom_line: 只要不被抓，什么都可以卖
+  power:
+    abilities: 话术、仪式、心理操控
+    cost: 无（代价由信众承担）
+    trigger: 信众走投无路
+    combat: 无
+  game_function:
+    side: npc
+    function: [trade, quest, intel]
+    spawn: 前中期（村镇）
+    interaction: 对话 / 交易 / 委托
+    reward: 假道具、半真半假的线索
+    recurrence: 反复出现
+    threat: 1
+    variants: [神棍, 气功大师, 保健品推销员]
+  mechanic_map:
+    map: [narrative, rule]
+    one_liner: 提供假情报，污染玩家的判断与笔记
+    adapt_score: 4
+    reason: 让「不可靠的 NPC」成为信息污染源
+  voice_lines:
+    - 「信则有，不信……也有。」
+    - 「你女儿的病，医院治不了，我能。」
+    - 「钱的事好说，先上香。」
+  naming:
+    structure: 职业 + 尊称（何老师）
+    chars: 师、老师、先生、居士
+    new_names: [白先生, 柳居士, 陈师傅]
+    avoid: 不要复用「何老师」
+  meta:
+    tags: [game, family, folk, npc, trade]
+    status: analyzed
+    risk: 宗教敏感；版权
+    sources: [https://www.marieclaire.com.tw/lifestyle/whats-hot/40929]
+    updated: 2026-11-13
+
+- type: character
+  id: C-0005
+  source: {work: 双瞳, author: 陈国富, medium: film}
+  logline: 一对双胞胎修行者，把整座城市当成渡劫的祭坛。
+  world_arch:
+    system: 道教成仙/渡劫体系
+    position: 仪式执行者，规则内的「修行者」
+  identity:
+    name: 谢亚理
+    title: 真仙观修行者
+    job: 修行者 / 真菌容器
+    faction: 真仙观（交阯道派）
+    era_place: 2002 台北
+    relations: [双胞胎姐妹（共生）, 黄火土（调查者）]
+  visual_voice:
+    visual: 双瞳、道观、霉菌、水
+    voice: 诵经、金属珠滚动
+  psyche:
+    desire: 完成渡劫、成仙
+    fear: 渡不过去
+    secret: 成仙需要别人的命
+    morality: 非人逻辑
+    bottom_line: 为了飞升，什么都可以
+  power:
+    abilities: 道教成仙术 + 真菌/幻觉
+    cost: 身体损坏，靠真菌与献祭维持
+    trigger: 渡劫仪式
+    combat: 中
+  game_function:
+    side: hostile
+    function: [event, boss]
+    spawn: 中期（道观区域）
+    interaction: 战斗 / 干扰仪式
+    reward: 成仙术残页、真菌样本
+    recurrence: 一次性
+    threat: 4
+    variants: [渡劫者, 双生容器, 假仙]
+  mechanic_map:
+    map: [encounter, rule]
+    one_liner: 她要在你身上完成仪式，你不能硬打，只能破它的步骤
+    adapt_score: 4
+    reason: 仪式型 BOSS，天然适配「规矩」系统
+  voice_lines:
+    - 「你身上有我要的东西。」
+    - 「渡劫不是杀人，是渡人。」
+    - 「我会带你一起走。」
+  naming:
+    structure: 姓 + 雅字；道派地名用古称
+    chars: 亚、理、真、仙、交
+    new_names: [谢明夷, 顾无相, 白鹤观]
+    avoid: 不要复用「谢亚理」「真仙观」
+  meta:
+    tags: [film, body, folk, boss, sacrifice]
+    status: analyzed
+    risk: 版权（电影）；宗教敏感
+    sources: [https://movie.douban.com/review/9332301/]
+    updated: 2026-11-13
+
+- type: character
+  id: C-0006
+  source: {work: 动物园规则怪谈, author: phKeaLx, medium: rules-horror}
+  logline: 一个「会走路的规则」：他检查的不是你，是你有没有按规则做事。
+  world_arch:
+    system: 规则空间（同一园区多套规则层）
+    position: 规则执行者（他自己也在规则里）
+  identity:
+    name: 动物园员工
+    title: 员工 / 夜班保安 / 讲解员（按区域变化）
+    job: 规则执行
+    faction: 动物园
+    era_place: 规则空间，时代不明
+    relations: [游客（检查对象）, 「它」（真正的管理者）]
+  visual_voice:
+    visual: 制服、工牌、手电、微笑
+    voice: 背诵式、礼貌到不正常
+  psyche:
+    desire: 维持规则运行
+    fear: 自己违反规则
+    secret: 他也不知道规则是谁定的
+    morality: 中立
+    bottom_line: 只执行文本，不解释
+  power:
+    abilities: 检查、纠正、驱逐
+    cost: 违规会被「它」处理
+    trigger: 游客违反规则
+    combat: 不可战胜
+  game_function:
+    side: rule-entity
+    function: [rule, gatekeeper]
+    spawn: 每层入口 / 检查点
+    interaction: 检查票据 / 提问 / 给出规则
+    reward: 通行 / 惩罚 / 新规则
+    recurrence: 反复出现
+    threat: 3
+    variants: [保安, 导游, 水族馆讲解员, 保洁]
+  mechanic_map:
+    map: [rule]
+    one_liner: 他是会走路的规则；你要在他面前做对
+    adapt_score: 5
+    reason: 把教程/引导拟人化成检查者，最贴我们的「规矩」系统
+  voice_lines:
+    - 「请出示您的门票。……谢谢，祝您游玩愉快。」
+    - 「根据员工手册第 7 条，您不能在这里停留。」
+    - 「您看见的东西，请当作没有看见。」
+  naming:
+    structure: 机构文本 + 岗位名（游客指南/员工手册/讲解员）
+    chars: 指南、守则、须、止、勿
+    new_names: [夜巡须知, 渡口守则, 拾骨人契]
+    avoid: 不要复用「动物园」原文
+  meta:
+    tags: [rules-horror, rule, rule-entity, urban]
+    status: analyzed
+    risk: 版权（原作）；「怪谈」二创需谨慎
+    sources: [http://www.chinawriter.com.cn/n1/2024/0514/c404027-40235528.html]
+    updated: 2026-11-13

@@ -1,122 +1,68 @@
-# 素材库（refs）地基 v0.1
+# refs/ 素材库 v0.2（角色卡优先）
 
-> 目标：把「国风克苏鲁 / 中式怪谈」的优秀作品，拆成可检索、可评分、可映射到我们玩法（命格 / 规矩 / 污染 / 元素）的卡片。
-> 卡片是设计参考，不是改编素材；只借机制、结构、母题，不搬名字与专有设定。
+> v0.1 太杂：作品、民俗、角色混在一起。v0.2 只保留两类卡，**角色卡是主体**。
+> 只收「国风克苏鲁 / 道诡气质」的东西；纯民俗恐怖不入主库（见 works.md 末尾排除清单）。
 
-## 0. 设计目标
-1. 每张卡回答三个问题：**它为什么可怕？它的规则是什么？它能变成我们的什么机制？**
-2. 支撑三个系统：命格（开局 build）、规矩（规则怪谈式引导）、污染（认知/资源）。
-3. 可被检索：标签、评分、来源、状态齐全，换个人也能接着用。
+## 1. 两类卡
+- **角色卡 C-xxxx（主体）**：任何可能出场的角色——己方、敌方、NPC、规则实体——都用同一套维度填。叙事层 + 游戏功能层都要有。
+- **作品特征卡 W-xxxx（出处）**：只记「这部作品独特在哪、命名法、世界架构、可偷的点」，不写长剧情。
+- 民俗母题不单独建卡，作为作品特征卡里的一个字段；以后真要用再抽出来。
 
-## 1. 三类卡片
+## 2. 角色卡 12 组维度
 
-### 1.1 作品卡（W-0001）
-一本书 / 一部游戏 / 一部电影的「世界观 + 恐怖引擎」。
-
-| 字段 | 说明 | 必填 |
+| 组 | 字段 | 说明 |
 |---|---|---|
-| id | W-0001 | ✅ |
-| title / alias | 标题 / 别名 | ✅ |
-| author | 作者 / 团队 / 导演 / 工作室 | ✅ |
-| medium | novel / webnovel / game / film / animation / comic / rules-horror / scp | ✅ |
-| year | 年份（不确定写「约」并标注） | ✅ |
-| sources | 链接：主创访谈 / 百科 / Steam / 豆瓣 / 原文 | ✅ |
-| logline | 一句话概括 | ✅ |
-| world | 时代 / 地域 / 民俗基底 | ✅ |
-| anomaly_rules | 这个世界「不讲理」的核心规则 / 禁忌 | ✅ |
-| horror_engine | 恐惧来源：cognition / rule / body / folk / social / family / history / system | ✅ |
-| narrative_structure | 双世界 / 单元 / 循环 / 不可靠叙述 / 碎片考据 | ✅ |
-| cast | 关联角色卡 id | ⬜ |
-| motifs | 关联母题卡 id | ⬜ |
-| transferable | 能抽象成我们的什么系统 / 关卡 / 事件 | ✅ |
-| risk | 版权 / 敏感 / 同质化 | ✅ |
-| tags | 受控词表 | ✅ |
-| status | raw / analyzed / mapped / prototyped / archived | ✅ |
+| A 来源 | source | 作品、作者、媒介/年份、出处链接 |
+| B 一句话 | logline | 他是谁 + 想要什么 + 卡在哪 |
+| C 世界架构 | world_arch | 属于哪种世界系统（双世界/境界/私坛神系/规则空间/异象地理/组织/时间/宗族），他在系统里的位置 |
+| D 身份与称谓 | identity | 本名、道号/诨名、他称；职业/职位；阵营/家族/机构；时代地域；师承/血缘/契约 |
+| E 外观与语言 | visual_voice | 一眼识别的视觉符号；口音/口癖/常用词/诵念 |
+| F 性格与动机 | psyche | 欲望、恐惧、秘密、道德灰度、底线 |
+| G 能力与代价 | power | 能力/功法/仪式/道具；代价/禁忌/触发条件；战斗与非战斗能力 |
+| H **游戏功能** | game_function | 见下节，任何角色必填 |
+| I 机制映射 | mechanic_map | 可变成命格/规矩/污染/元素/遭遇/叙事中的什么；适配分 |
+| J 台词样例 | voice_lines | 3 句台词（初见/威胁/结局），给命名和语言做参考 |
+| K 命名法拆解 | naming | 名字结构、用字偏好、可生成的新名字、禁用的字/避免直接复用 |
+| L 归档 | meta | 标签、状态、版权风险、来源、更新日期 |
 
-### 1.2 角色卡（C-0001）—— 素材库主体
-| 字段 | 说明 | 必填 |
-|---|---|---|
-| id | C-0001 | ✅ |
-| name / alias | 姓名 / 称谓 | ✅ |
-| source | 作品 id + 标题 + 作者 + 媒介 | ✅ |
-| identity | 身份 / 职业（警察、风水师、神婆、道士、主播、剧作家、学生…） | ✅ |
-| affiliation | 阵营 / 家族 / 组织 / 教派 | ✅ |
-| era_place | 时代 / 地域 | ✅ |
-| story_role | protagonist / antagonist / guide / witness / vessel / rule-incarnate / victim / accomplice | ✅ |
-| anomaly_relation | investigator / believer / sacrifice / vessel / contract / symbiosis / seal / enforcer | ✅ |
-| desire | 想要什么（一句话） | ✅ |
-| fear | 怕什么 / 弱点 | ✅ |
-| secret | 秘密 / 谎言 / 不可靠点 | ✅ |
-| ability | 能力 / 仪式 / 道具 | ✅ |
-| cost | 代价 / 限制 / 触发条件 | ✅ |
-| signature | 代表场景 / 台词 / 桥段 | ✅ |
-| visual_motif | 视觉母题（纸扎、红白、符箓、雾、眼、镜…） | ✅ |
-| audio_motif | 声音母题（唢呐、木鱼、诵经、方言…） | ⬜ |
-| transferable | 可迁移成：命格 / 敌人 / NPC / 事件 / 规则 | ✅ |
-| adapt_score | 适配度 1–5 | ✅ |
-| risk | 版权 / 敏感 / 同质化 | ✅ |
-| tags | 受控词表 | ✅ |
-| sources | 出处链接 | ✅ |
-| status / updated | 状态 / 更新日期 | ✅ |
+## 3. 「游戏功能」（H）字段——己方/敌方通用
+- **side**：player（可操作）/ ally（可招募/跟随）/ npc（中立）/ hostile（敌对）/ rule-entity（规则实体，不可用常规战斗解决）/ boss
+- **function**：战斗 / 辅助 / 治疗 / 交易 / 情报 / 任务 / 导师 / 守关 / 事件触发 / 规则执行 / 提供命格 / 容器 / 召唤 / 环境威胁
+- **spawn**：出现在哪一层/区域/事件类型；开局 / 中期 / 终局
+- **interaction**：对话 / 交易 / 战斗 / 献祭 / 试炼 / 跟随 / 契约
+- **reward**：掉落 / 解锁 / 情报 / 命格 / 材料
+- **recurrence**：一次性 / 反复出现 / 随机事件
+- **threat**：威胁等级 1–5
+- **variants**：同功能的 2–3 个换皮变体（防止只有一张皮）
 
-### 1.3 母题卡（M-0001）
-民俗、空间、物件、仪式——比角色更「可组合」的素材。
+## 4. 作品特征卡（W）
+必填：title / author / medium / year / source / one_liner / **uniqueness**（为什么收）/ world_arch / naming（3–5 个例名 + 规则）/ horror_core / stealable（可偷的命名、架构、角色功能）/ cthulhu_score（1–5）/ verdict（收 / 观察 / 排除）。
 
-| 字段 | 说明 |
-|---|---|
-| id / motif | M-0001 / 纸扎、冥婚、喜丧、傩戏、赶尸… |
-| type | folk / space / object / ritual / body / sound |
-| sources | 出处作品 id |
-| symbols | 视觉符号 |
-| taboos / rules | 禁忌 / 规矩（能直接变成玩法） |
-| mechanism | 可转化：资源 / 规则 / 危险 / 遭遇 / 解锁条件 |
-| risk | 敏感度（迷信 / 邪教 / 血腥） |
-| tags | 受控词表 |
+## 5. 受控词表
+- medium：novel / webnovel / game / film / animation / comic / rules-horror / scp
+- horror_engine：cognition / rule / body / folk / family / history / system
+- side：player / ally / npc / hostile / rule-entity / boss
+- function：combat / support / trade / intel / quest / mentor / gatekeeper / event / rule / fate / vessel / summon / hazard
+- system_map：fate / rule / pollution / reaction / encounter / narrative
+- motif：paper / red-white / mask / talisman / incense / water / fog / eye / mirror / mansion / village / urban / cave / temple
 
-## 2. 受控词表（tags，先定死，避免乱）
-- **medium**：novel / webnovel / game / film / animation / comic / rules-horror / scp / folk
-- **horror_engine**：cognition（认知）/ rule（规则）/ body（身体）/ folk（民俗）/ social（社会）/ family（家庭）/ history（历史）/ system（系统）
-- **story_role**：protagonist / antagonist / guide / witness / vessel / rule-incarnate / victim / accomplice
-- **anomaly_relation**：investigator / believer / sacrifice / vessel / contract / symbiosis / seal / enforcer
-- **motif**：paper（纸扎）/ red-white（红白）/ mask（傩面）/ talisman（符箓）/ incense（香火）/ water / fog / eye / mirror / mansion（老宅）/ village / urban（城寨/都市）/ cave / temple
-- **system_map**：fate（命格）/ rule（规矩）/ pollution（污染）/ reaction（元素反应）/ narrative（叙事）/ encounter（遭遇）/ economy
+## 6. 评分（选素材用）
+恐怖引擎强度 / 命格耦合 / 规矩耦合 / 污染耦合 / solo 可做性 / 原创空间 / 版权风险（1–5，风险反向）。
+角色卡只打「适配分 1–5 + 一句理由」，不再面面俱到。
 
-## 3. 评分维度（每项 1–5，选素材时看总分）
-- **恐怖引擎强度**：设定本身是否让人后背发凉。
-- **命格耦合**：能否抽象出「能力 + 代价」的开局 build。
-- **规矩耦合**：能否抽象成可观察、可违反、有后果的规则。
-- **污染耦合**：能否抽象成认知/信息层面的资源。
-- **solo 可做性**：做成一个人能实现的 2D / 文字 / 灰盒的成本（越高越省）。
-- **原创空间**：借鉴后还能玩出我们自己的东西。
-- **版权风险**：低 / 中 / 高（高风险只做机制参考）。
-
-## 4. 命名 / 目录 / 状态
+## 7. 目录
 ```
 refs/
-  README.md           # 本文件：维度与规范
-  works.md            # 作品清单与剧情概括
-  cards/
-    _examples.yaml    # 示例：作品卡 + 角色卡
-    C-0001_李火旺.yaml
-  motifs/
-    M-0001_纸扎.yaml
+  README.md               # 本文件
+  works.md                # 收哪些作品、为什么、特征/命名/架构
+  naming.md               # 命名法拆解 + 原创名字种子 + 世界架构种子
+  cards/_examples.yaml    # 示例角色卡（己方/敌方/NPC/规则实体）
 ```
-- 文件名：`{type}-{四位编号}_{中文名}.yaml`
-- 状态流转：raw（只收集）→ analyzed（填完作品/角色卡）→ mapped（对应到游戏系统）→ prototyped（纸面/灰盒验证过）→ archived（弃用，保留记录）
 
-## 5. 填写规范
-1. 每个字段一句话，不写空泛形容词。
-2. 不确定的内容加 `?`，并在 sources 里写清依据；不编年份、不编作者。
-3. 引用原文只保留必要片段，注明出处。
-4. 角色卡至少填满：身份、欲望、恐惧、与异常的关系、能力、代价、可迁移点——这七项决定它能不能变成玩法。
-5. 每张卡末尾写一句「这张卡教会我们什么」。
+## 8. 状态与工作流
+raw → analyzed（填完 A–H）→ mapped（I 能对应到系统）→ prototyped（30 秒纸面/灰盒）→ archived。
+规则：**没有 game_function 的角色卡不完整**；没有命名拆解的作品卡不完整。
 
-## 6. 版权与红线
-- 只借**机制 / 结构 / 母题**，不直接使用角色名、专有设定、标志性桥段。
-- 《道诡异仙》《双瞳》《咒》等都有明确版权方；改编、续写、商用需授权。
-- 涉及迷信 / 邪教 / 血腥的题材，注意国内平台与版号风险；表达上做「民俗恐怖」，不做「封建迷信宣传」。
-- 引用他人解析文章时注明链接，不整段搬运。
-
-## 7. 工作流
-收集（raw）→ 拆解（analyzed：填作品卡 + 角色卡）→ 映射（mapped：命格/规矩/污染/事件）→ 原型（prototyped：30 秒纸面或灰盒）→ 归档。
-每完成 10 张卡，回看一次：哪些能直接进游戏、哪些只是好看。
+## 9. 版权与红线
+只借机制 / 结构 / 母题；不直接使用角色名、专有设定、标志性桥段；改编需授权。
+迷信/邪教/血腥题材注意平台与版号风险；做「民俗恐怖表达」，不做「封建迷信宣传」。
