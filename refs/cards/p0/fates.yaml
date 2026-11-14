@@ -1,0 +1,45 @@
+# P0 命格卡（D）——开局「请神/摸骨」三选一池
+# 规则：明面收益 + 暗面代价；不可 reroll；暗面以一句谶语提示；低神智时命格变异。
+# 数值暂定，全部可调。
+
+- type: fate
+  id: D-0001
+  name: 灯下骨
+  tier: T1
+  surface: 初始七星灯多一盏（气血上限 +14）
+  cost: 神智上限 -10；目睹不可名状之物时掉神智 +20%
+  variant: 神智 < 33 时，每熄一盏灯改为 +2 灵力（灯灭反而兴奋）
+  omen: 「灯下莫回头，回头多一鬼。」
+  draw: 三选一
+  numbers: {hp_bonus: 14, sanity_max: -10, witness_drain_mult: 1.2}
+  adapt_score: 4
+  why: 让「硬扛」有代价，鼓励玩家在灯灭前结束战斗
+  status: draft
+
+- type: fate
+  id: D-0002
+  name: 无面客
+  tier: T1
+  surface: 读禁书/念禁符的神智门槛 -10（更早能用强符）
+  cost: UI 腐坏提前一档（神智 < 80 就开始乱码，地图更早消失）
+  variant: 神智 < 33 时，幻觉敌人中有一个是「真的」帮你（但你不确定）
+  omen: 「脸是借的，名字也是。」
+  draw: 三选一
+  numbers: {forbidden_threshold_bonus: -10, ui_corrupt_at: 80}
+  adapt_score: 4
+  why: 把「提前获得力量」与「提前失去信息」捆在一起
+  status: draft
+
+- type: fate
+  id: D-0003
+  name: 拾子命
+  tier: T1
+  surface: 符位 +1，开局多一张随机符
+  cost: 死后怨灵保留你的法器与一张符，下一局要打赢才能取回
+  variant: 连续两局不取回，怨灵升级为精英（带你的旧符）
+  omen: 「捡来的，都要还。还不上的，下一世还。」
+  draw: 三选一
+  numbers: {slots_bonus: 1, extra_random_talisman: 1, wraith_hp: 80}
+  adapt_score: 4
+  why: 把「永久死亡」变成「跨局债」，给失败一个具体的形状
+  status: draft

@@ -1,0 +1,366 @@
+# P0 角色卡（C）——己方 / 小怪 / 精英 / BOSS / 规则实体 / NPC
+# 数值均为占位（对齐设计文档 3.x 的层1-2 曲线），后续统一调参。
+
+- type: character
+  id: C-0001
+  source: {work: 刍狗, author: 个人项目, medium: game, design_ref: "2.5 人物 / 3.2 角色基础"}
+  logline: 天师府每年派下山的方士，没人回去过；你是今年的那个。
+  world_arch:
+    system: 晚明质感 + 三层神系 + 归墟地层
+    position: 体制派出的消耗品，规则内的「外来者」
+  identity:
+    name: 玩家方士
+    alias: [你]
+    title: 自取道号
+    job: 天师府方士 / 下潜者
+    faction: 天师府（玄门正统）
+    era_place: 大晏末，渎县
+    relations: [玄元子（失踪师父）, 天师府（派遣者）]
+  visual_voice:
+    visual: 旧道袍、桃木剑、葫芦、伞（阴面用）
+    voice: 冷静、克制的自述；道号由玩家自取
+  psyche:
+    desire: 查清渎县一夜消失的真相，找回师父
+    fear: 下去之后，自己也不再是「人」
+    secret: 符箓本身就是「它们」的文字
+    morality: 玩家决定
+    bottom_line: 玩家决定
+  power:
+    abilities: 法器 + 符箓编程；土遁挖掘；葫芦可装任何液体作符胆
+    cost: 每次念符磨损三魂；阴性伤害熄灯
+    trigger: 施法 / 目睹不可名状 / 读禁书
+    combat: 中（依赖组合，不依赖数值）
+  game_function:
+    side: player
+    function: [combat, support, explore]
+    spawn: 全程
+    interaction: 玩家操作
+    reward: 解锁图鉴/秘密/祠堂知识
+    recurrence: 常驻
+    threat: 0
+    variants: [方士, 书生, 土夫子, 傩公, 鲛人后裔]
+  mechanic_map:
+    map: [fate, rule, pollution]
+    one_liner: 玩家就是符箓 VM：拼句、选物质、承担神智代价
+    adapt_score: 5
+  numbers:
+    hp: 100
+    sanity: 100
+    mana: 50
+    start_weapon: 桃木剑（4 符位，金系加成）
+    start_items: [空葫芦, 土遁法印]
+    start_talismans: [飞剑, 急急如律令]
+    move: 参考 Noita 手感，轻功条替代悬浮
+  voice_lines:
+    - 「天师府每年派一个人下来。牌位上没有名字，只有道号。」
+    - 「这符是他们的字。每念一次，它就多认识我一点。」
+    - 「师父，你最好已经死了。」
+  naming:
+    structure: 自取道号（元素+字+子/散人/真人），本名不入档
+    chars: 玄、清、丹、守、枯、默
+    new_names: [玄枯子, 守默子, 丹烬子]
+  meta:
+    tags: [player, fate, rule, pollution]
+    status: draft
+    risk: 无（原创）
+    updated: 2026-11-14
+
+- type: character
+  id: C-0002
+  source: {work: 刍狗, author: 个人项目, medium: game, design_ref: "2.3 地层结构 / 3.5 敌人曲线"}
+  logline: 死在矿里的矿工，被朱砂和水银养成了会扑人的东西。
+  world_arch:
+    system: 矿井（第 1 层）
+    position: 环境的一部分，比怪更接近「矿难本身」
+  identity:
+    name: 矿鬼
+    title: 矿鬼（矿工亡魂）
+    job: 亡魂 / 徘徊者
+    faction: 无
+    era_place: 渎县矿井
+    relations: []
+  visual_voice:
+    visual: 煤黑、矿灯、烂工服、指缝渗朱砂
+    voice: 咳嗽、敲矿壁、低哑的「还我灯来」
+  psyche:
+    desire: 找回自己的矿灯
+    fear: 光（真火）/ 水银
+    secret: 它们在替某样东西「挖」
+    morality: 无（本能）
+    bottom_line: 无
+  power:
+    abilities: 扑咬、召唤同伴、临死自爆（怨气）
+    cost: 无
+    trigger: 玩家靠近光源 / 挖到朱砂
+    combat: 弱
+  game_function:
+    side: hostile
+    function: [combat, hazard]
+    spawn: 层1 矿井，2–4 只一组
+    interaction: 战斗 / 引到瓦斯区借爆炸
+    reward: 煤、硝石、银两 10–20、矿灯（可卖）
+    recurrence: 反复出现
+    threat: 1
+    variants: [矿鬼, 矿鬼·嗅符（会追符光）, 矿鬼·爆（死亡爆炸）]
+  mechanic_map:
+    map: [encounter, reaction]
+    one_liner: 教玩家「用环境杀怪」的第一课：引到瓦斯区/水银池
+    adapt_score: 4
+  numbers:
+    hp: 10–30
+    damage: 3–8
+    speed: 慢
+    drop_silver: 10–20
+  voice_lines:
+    - 「……灯……我的灯……」
+    - 「别挖了……下面有东西在数人头……」
+    - 「你也会留下来的。」
+  naming:
+    structure: 职业 + 鬼/怪/尸
+    chars: 矿、煤、灯、鬼
+    new_names: [煤鬼, 灯奴, 井伥]
+  meta:
+    tags: [hostile, combat, layer1]
+    status: draft
+    risk: 无
+    updated: 2026-11-14
+
+- type: character
+  id: C-0003
+  source: {work: 刍狗, author: 个人项目, medium: game, design_ref: "2.3 地层结构"}
+  logline: 披着人皮的画，会变成你最想见到的人。
+  world_arch:
+    system: 地宫（第 2 层）
+    position: 信息层威胁：不是打不过，是认不出
+  identity:
+    name: 画皮
+    title: 画皮（皮囊妖）
+    job: 伪装者 / 掠食者
+    faction: 无（地宫旧物）
+    era_place: 地宫
+    relations: []
+  visual_voice:
+    visual: 人皮、画卷、背对时没有影子
+    voice: 学谁像谁，但会漏掉一句口头禅
+  psyche:
+    desire: 一张更好的皮
+    fear: 铜镜 / 照妖 / 被叫破真名
+    secret: 它记得每个被它替换的人
+    morality: 无
+    bottom_line: 无
+  power:
+    abilities: 伪装成 NPC/物品；被识破后撕皮战斗
+    cost: 伪装期间不能攻击
+    trigger: 玩家与「NPC」对话 / 拾取「物品」
+    combat: 中
+  game_function:
+    side: hostile
+    function: [event, intel]
+    spawn: 层2 地宫，随机替换一个 NPC/宝箱
+    interaction: 对话→识破（铜镜/照妖/问细节）→战斗
+    reward: 画皮（材料）、它记得的死者名字（线索）
+    recurrence: 每层 0–1 次
+    threat: 3
+    variants: [画皮·村妇, 画皮·货郎, 画皮·神像]
+  mechanic_map:
+    map: [rule, narrative]
+    one_liner: 让玩家怀疑 NPC：信息可能是假的，长相也可能是假的
+    adapt_score: 4
+  numbers:
+    hp: 150–300
+    damage: 6–15
+    disguise_clues: 3（口头禅/影子/温度）
+  voice_lines:
+    - 「你终于来了，我等你好久。」（学的是师父的声音）
+    - 「皮旧了，该换了。」
+    - 「你猜，我现在是谁？」
+  naming:
+    structure: 物件/动作 + 妖/鬼/皮
+    chars: 画、皮、镜、影
+    new_names: [画皮, 借面, 影蜕]
+  meta:
+    tags: [hostile, intel, layer2, cognition]
+    status: draft
+    risk: 无
+    updated: 2026-11-14
+
+- type: character
+  id: C-0004
+  source: {work: 刍狗, author: 个人项目, medium: game, design_ref: "2.3 地层结构 / 3.5 敌人曲线"}
+  logline: 矿井的最深处不是矿脉，是一具还活着的旱魃。
+  world_arch:
+    system: 矿井（第 1 层 Boss）
+    position: 层主 / 封印的一部分
+  identity:
+    name: 旱魃
+    title: 旱魃（僵尸之祖）
+    job: 层主 / 灾异
+    faction: 无（旧日遗物）
+    era_place: 渎县矿井
+    relations: [与矿监衙门的挖掘有关]
+  visual_voice:
+    visual: 干裂的人形、赤地、龟裂、火星
+    voice: 干风、地裂、低频震动
+  psyche:
+    desire: 水（本能）/ 解脱
+    fear: 水银 / 阴气
+    secret: 它守着通往下一层的矿道
+    morality: 无
+    bottom_line: 无
+  power:
+    abilities: 热浪（蒸发液体）、龟裂（改变地形）、召唤土蝼、近身重击
+    cost: 怕水（相克 ×1.5）
+    trigger: 进入矿底 / 玩家使用明火
+    combat: 强
+  game_function:
+    side: boss
+    function: [gatekeeper, hazard]
+    spawn: 层1 最深处，一次性
+    interaction: 战斗 / 利用水银池与葫芦
+    reward: 朱砂×3、银 150、法器或符「毕方火」
+    recurrence: 一次性
+    threat: 4
+    variants: [旱魃, 火魃, 尸魃]
+  mechanic_map:
+    map: [reaction, encounter]
+    one_liner: 它逼玩家第一次「用葫芦装环境物质」：水克火
+    adapt_score: 5
+  numbers:
+    hp: 420
+    damage: 10–18
+    arena: 矿底，四周有水银池
+    weak: 水/阴（相克 ×1.5）
+    resist: 火（×0.6）
+    drop: {silver: 150, cinnabar: 3, talisman: 毕方火}
+  voice_lines:
+    - 「……水……」
+    - 「你们挖穿了我，就要留下来陪我。」
+    - 「天不雨，是我在呼吸。」
+  naming:
+    structure: 灾异 + 魃/魈/魅
+    chars: 旱、魃、赤、裂
+    new_names: [赤魃, 火魈, 焦魅]
+  meta:
+    tags: [boss, layer1, reaction]
+    status: draft
+    risk: 无
+    updated: 2026-11-14
+
+- type: character
+  id: C-0005
+  source: {work: 刍狗, author: 个人项目, medium: game, design_ref: "2.1 三层神系 / 2.4 势力"}
+  logline: 阴间衙门里管账的判官，他不打你，他只记账。
+  world_arch:
+    system: 阴间衙门（鬼市/幽都）
+    position: 规则实体，阴间官僚体系的一环
+  identity:
+    name: 崔判官
+    title: 判官
+    job: 掌功德业障账本
+    faction: 阴间衙门
+    era_place: 幽都 / 鬼市（第 5 层，原型可从山门小祠借位出现）
+    relations: [黑白无常（下属）, 玩家（账本上的名字）]
+  visual_voice:
+    visual: 官袍、账本、朱笔、无影
+    voice: 官腔、念名字、翻账本
+  psyche:
+    desire: 账目平衡
+    fear: 账本被毁
+    secret: 账本可以改，但改了要有人补
+    morality: 守规矩的恶
+    bottom_line: 只认账，不认人
+  power:
+    abilities: 勾魂（神智判定）、改账（收冥钱）、追捕（业障高时派无常）
+    cost: 不可战斗
+    trigger: 玩家死亡 / 业障 > 100 / 主动求见
+    combat: 不可战胜
+  game_function:
+    side: rule-entity
+    function: [rule, trade, quest]
+    spawn: 鬼市 / 山门小祠（原型）
+    interaction: 对话、行贿、改账、领托梦
+    reward: 改死因、托梦提示、功德
+    recurrence: 反复出现
+    threat: 5
+    variants: [崔判官, 书吏, 无常]
+  mechanic_map:
+    map: [rule, narrative]
+    one_liner: 他把「死亡记录」变成可交易的系统：你可以改账，但会欠债
+    adapt_score: 4
+  numbers:
+    bribe_cost: 100 冥钱/次
+    karma_threshold: 100
+    catch_penalty: 派黑白无常追猎（HP 200/只）
+  voice_lines:
+    - 「姓名，籍贯，死因。……死于自己的雷符，有意思。」
+    - 「账可以改。改一笔，补一笔。」
+    - 「功德不是善，是余额。」
+  naming:
+    structure: 姓 + 官职（判官/书吏/无常）
+    chars: 崔、判、簿、勾
+    new_names: [陆判官, 白书吏, 勾魂使]
+  meta:
+    tags: [rule-entity, trade, bureaucracy]
+    status: draft
+    risk: 无
+    updated: 2026-11-14
+
+- type: character
+  id: C-0006
+  source: {work: 刍狗, author: 个人项目, medium: game, design_ref: "1.5 阴阳两界与纸扎 / 2.5 人物"}
+  logline: 阴面的纸扎匠，你烧什么，他就能给你做出什么——前提是烧得干净。
+  world_arch:
+    system: 阴阳两界 / 纸扎铺
+    position: 阴面工匠，规则内的小商人
+  identity:
+    name: 老扎
+    title: 纸扎匠
+    job: 纸扎 / 阴器制作
+    faction: 阴面（无明确阵营）
+    era_place: 洞天纸扎铺
+    relations: [玩家（主顾）]
+  visual_voice:
+    visual: 纸灰、竹篾、浆糊手、半张脸在灯影外
+    voice: 行话、慢、爱答非所问
+  psyche:
+    desire: 有人记得烧东西的规矩
+    fear: 火断（没人烧纸）
+    secret: 他自己也是纸做的
+    morality: 中立
+    bottom_line: 只做买卖，不劝人
+  power:
+    abilities: 做纸版、代烧、点破阴器用法
+    cost: 收银两 + 纸；烧坏不赔
+    trigger: 带材料进纸扎铺
+    combat: 无
+  game_function:
+    side: npc
+    function: [trade, quest, intel]
+    spawn: 洞天/阴面入口
+    interaction: 制作纸版 → 自行烧送 → 阴面取阴器
+    reward: 阴器、纸人同伴、规矩提示
+    recurrence: 反复出现
+    threat: 1
+    variants: [老扎, 纸扎婆婆, 扎纸学徒]
+  mechanic_map:
+    map: [economy, rule]
+    one_liner: 把「烧」变成一次真实的物理过程：沾水就废、烧一半送一半
+    adapt_score: 5
+  numbers:
+    cost: "物品价 50% + 纸 20 银"
+    burn_time: 10 秒
+    failure: 沾水 / 烧一半 / 被风吹灭
+    duration: 阴器到天亮失效
+  voice_lines:
+    - 「烧干净。烧不干净，那边收到的是半截。」
+    - 「纸人替你死一次，只死一次。」
+    - 「你猜我为什么不怕火？」
+  naming:
+    structure: 老 + 职业/姓；或手艺 + 匠
+    chars: 扎、纸、灰、糊
+    new_names: [老扎, 纸马张, 糊灯匠]
+  meta:
+    tags: [npc, trade, paper, yin]
+    status: draft
+    risk: 无
+    updated: 2026-11-14

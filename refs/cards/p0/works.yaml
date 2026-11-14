@@ -1,0 +1,36 @@
+# P0 作品特征卡（W）——给命名/世界观做校准用
+
+- type: work
+  id: W-0001
+  title: 道诡异仙
+  author: 狐尾的笔
+  medium: webnovel
+  uniqueness: 把「不可靠叙述」做成主角体验；修仙本身是吃人的骗局
+  world_arch: 双世界（现代 / 诡异修仙）+ 司命-天道神系 + 修行即污染
+  naming: [李火旺, 丹阳子, 坐忘道, 白玉京, 心素, 司命]
+  naming_rules:
+    - 本名土气 + 道号拔高
+    - 道家术语反用为组织名
+    - 概念造词（心素）
+  horror_core: 认知不可靠 + 成仙骗局 + 身边人不断死去
+  stealable: [双世界切换, 心素式污染, 假导师, 道号命名]
+  cthulhu_score: 5
+  verdict: 收
+  design_fit: 《刍狗》的「符是它们的文字 + 三魂磨损」与「修仙是骗局」同构，可拿来校准主线反转
+
+- type: work
+  id: W-0002
+  title: 动物园规则怪谈
+  author: phKeaLx（十六椰子）
+  medium: rules-horror
+  uniqueness: 纯规则文本构成恐怖；多视角矛盾；实体无名（「它」）
+  world_arch: 规则空间——同一园区多套规则层
+  naming: [游客指南, 员工手册, 水族馆通知, 它]
+  naming_rules:
+    - 机构说明书体命名
+    - 实体无名化
+  horror_core: 规则不明但可推理；违反即死
+  stealable: [规则即引导, 文本即关卡, 无名实体, 假规则]
+  cthulhu_score: 4
+  verdict: 收
+  design_fit: 《刍狗》每个区域 2–3 条规矩 + UI 说谎，直接借它的「多视角矛盾」结构

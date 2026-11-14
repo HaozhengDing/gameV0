@@ -1,0 +1,60 @@
+# P0 区域卡（L）+ 事件卡（E）
+
+- type: location
+  id: L-0001
+  name: 矿井（第 1 层）
+  layer: 1
+  theme_materials: [煤, 硝石, 硫磺, 朱砂, 水银池, 铁, 木支架]
+  enemies: [矿鬼, 土蝼, 旱魃（BOSS）]
+  hazards:
+    - 瓦斯：明火（毕方火/煞）→ 爆炸 60 伤、半径 80
+    - 水银池：密度大于铁，尸体/掉落物浮起，可装葫芦
+    - 塌方：挖掘过快触发落石
+  rules:
+    - 矿里不能用明火（村民/矿工口述）；用阴火/水/物理可绕开
+    - 水银池边不要念「归」（回灵会被水银压住）——假规矩，实际是提示危险
+  numbers:
+    duration: 15 分钟（原型）
+    mobs: 4–6
+    elite: 0–1（画皮可从第 2 层借位测试）
+    silver: 300
+    exit: 洞天（传法/鬼市/丹炉/纸扎铺）
+  layout_notes: 入口→矿道分叉（左：瓦斯近路 / 右：水银池绕路）→矿底 BOSS
+  open_questions: [原型层长度, 是否强制 BOSS]
+  design_ref: [2.3 地层结构, 3.6 经济流]
+  status: draft
+
+- type: event
+  id: E-0001
+  name: 子时莫应声
+  kind: 规矩
+  trigger: 层 1/2 游戏内子时，背后有人叫你的道号
+  rule_text: 村民说过：夜半有人叫，别应声，别回头。
+  choices:
+    - 应答: 神智 -25，召来「怨灵」（HP 80）追猎 100 秒
+    - 沉默: 安全，但听到下一句线索（徐九游记残页）
+    - 贴符（朱砂+纸）: 现出脚印，开启密道（隐藏出口）
+    - 离开: 安全，错过线索
+  outcomes_notes: 沉默不是最优，贴符才有奖励——鼓励玩家用道具验证规矩
+  numbers: {sanity_loss: 25, wraith_hp: 80, reward: 游记残页 ×1}
+  design_ref: [1.4 三魂七魄, 2.5 人物]
+  status: draft
+
+- type: event
+  id: E-0002
+  name: 纸扎铺·烧送
+  kind: 交易/仪式
+  trigger: 洞天或阴面入口遇到老扎
+  rule_text: 阳间烧什么，阴间就有什么。烧不干净，收到的是半截。
+  steps:
+    - 选物品 → 付银两 + 纸 → 老扎做纸版
+    - 自行到火源烧送（沾水就废、烧一半只送一半）
+    - 阴面出现对应「阴器」，天亮失效
+  choices_notes: 可以故意烧一半，阴器会「缺一半属性」（风险换便宜）
+  numbers:
+    cost: "物品价 50% + 纸 20 银"
+    burn_time: 10 秒
+    failure: [沾水, 烧一半, 被风吹灭]
+  rewards: [阴器, 纸人同伴（一次性替死）, 规矩提示]
+  design_ref: [1.5 阴阳两界与纸扎]
+  status: draft
