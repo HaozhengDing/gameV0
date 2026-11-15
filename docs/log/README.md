@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-16 | [2026-11-16-02-vm-spec-decisions-final.md](2026-11-16-02-vm-spec-decisions-final.md) | 决策 | 详细 | T1 六条决策全部按 AI 建议拍板；C-VM/C-ACT v0.1 进入契约冻结候选 |
 | 2026-11-16 | [2026-11-16-01-possession-scope-and-vm-decisions.md](2026-11-16-01-possession-scope-and-vm-decisions.md) | 决策 | 详细 | 入魔效果清单后移 M1 计划；不做角色机制分化（表现层先做）；VM 第 3 条定「整句不念」 |
 | 2026-11-15 | [2026-11-15-11-noita-vm-reference.md](2026-11-15-11-noita-vm-reference.md) | 建议 | 详细 | Noita 参考：触发预付费/逐符部分施法/递归上限 2/Add Mana 负消耗；6 条拍板的对照建议 |
 | 2026-11-15 | [2026-11-15-10-t3-vm-impl.md](2026-11-15-10-t3-vm-impl.md) | 更新 | 详细 | T3 参考符箓 VM：ctest 7/7、契约用例 30/30 + 5 条边界回归；复审修 5 个实现问题 |

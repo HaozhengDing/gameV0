@@ -3,7 +3,7 @@
 schema: gamev0.vm_manifest/v0.1
 version: 0.1
 updated: "2026-11-15"
-status: 草案｜待用户审定
+status: v0.1 已拍板（2026-11-16；§7.3 六条按 AI 建议落定）
 spec: docs/tech/talisman-vm-spec.md
 card_catalog: tests/vm_cases/cards.yaml
 total_cases: 30
