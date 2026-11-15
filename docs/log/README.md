@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-15 | [2026-11-15-08-scale-narrative-leap-wand.md](2026-11-15-08-scale-narrative-leap-wand.md) | 建议 | 详细 | 方向确认：规模长线做、叙事借 Noita、跃迁魔杖参考；彩蛋暂缓 |
 | 2026-11-15 | [2026-11-15-07-integrate-roadmap-bundle.md](2026-11-15-07-integrate-roadmap-bundle.md) | 更新 | 详细 | 整合 7b0ea7e 路线图 03 到当前 main，保留 T0/T6/CI |
 | 2026-11-15 | [2026-11-15-06-ci-workflow.md](2026-11-15-06-ci-workflow.md) | 更新 | 详细 | T0 收尾：接入 GitHub Actions 数据校验 workflow |
 | 2026-11-15 | [2026-11-15-05-t6-competitors.md](2026-11-15-05-t6-competitors.md) | 建议 | 详细 | T6：竞品检索；直接竞品未见，最近邻 Cave Alchemist，Magicraft 验证需求 |
