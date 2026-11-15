@@ -1,6 +1,6 @@
 # T1 符箓 VM 形式规格（契约 C-VM / C-ACT / C-CASE）
 
-> **状态：草案 v0.1｜待用户审定**
+> **状态：草案 v0.1｜待用户审定**（2026-11-15 补丁：澄清实现边界，语义未改，见附录 B）
 > 制定：2026-11-15（AI 起草，DeepSeek）｜审定：用户（T1 审阅后移，见 `docs/02-m0-plan.md` 2026-11-15 优先级调整）
 > 依据：`docs/01-decision-twist.md` D3 / D4（实验 B）｜`docs/02-m0-plan.md` T1（8 个必须回答的问题，批注 C06/C09/C46）｜`refs/cards/p0/talismans.yaml` F-0001~F-0004｜`refs/cards/p0/systems.yaml` S-0002 / S-0004（phantom_rules）｜`data/materials.json`｜`data/magic_numbers.json` sanity 段
 > 输入给：T3 参考 VM 实现（`sim_core/vm/`）、T4b 世界层执行动作；产出用例 `tests/vm_cases/`（30 条，本文件 §6 定义 schema）
@@ -19,7 +19,7 @@
 | 7 | 禁符反噬/幻符替换/幻影符时序（S-0004） | 施法 8 步状态机（§2.7）：反噬优先 → 解析 → 15% 掷骰 → 执行 → 回符 → 幻影符放置；**禁符与幻符永不同次** | 已定决策（S-0004） |
 | 8 | 动作列表格式（C-ACT）（C09） | 16 种动作、字段与默认值表（§3.2）；物质 id 只能取 `data/materials.json`；覆盖 data 现有 8 种 `result.type` | 冻结 |
 
-**读这份文档的最短路径**：要写 T3 → 读 §2（执行模型）+ §3（动作）+ §4（输入输出）+ §6.2（用例 schema）+ 附录 A（伪代码）。要审语义 → 读 §0 + §7.3（5 个待你拍板的取舍点）。
+**读这份文档的最短路径**：要写 T3 → 读 §2（执行模型）+ §3（动作）+ §4（输入输出）+ §6.2（用例 schema）+ 附录 A（伪代码）。要审语义 → 读 §0 + §7.3（6 个待你拍板的取舍点）。
 
 ---
 
@@ -140,7 +140,7 @@ cast(req):
 2. 子句本身也可以带触发符头 → 继续展开，直到 `depth > max_trigger_depth`。
 3. **深度超限**：不解析、不扣费、不消耗牌，`trigger = null`，记 `depth_limit`。
 4. **子句无符可读**（牌堆尽）：`trigger = null`，记 `empty_trigger`。
-5. 子句的灵力在**执行阶段展开到该子句时**扣（顺序：父句先扣 → 父句动作生成 → 子句扣费/展开）；不足 → 该子句不展开（`trigger = null`），父动作保留，记 `sub_fizzle_no_spirit`。
+5. 子句的灵力在**执行阶段展开到该子句时**扣（顺序：父句先扣 → 父句动作生成 → 子句扣费/展开）；不足 → 该子句不展开（`trigger = null`），父动作保留，记 `sub_fizzle_no_spirit`（此时子句卡片的 `consumed` 与游标口径见 §7.4.1 ①）。
 6. 每个符胆**最多挂 1 个触发子句**（多个触发符头累积时，深度只 +1，后一个触发符头的语义 = 追加 payload 而不是再嵌套——本草案简化为"每句只取第一个触发符头"）。
 
 > 第 6 条为**本草案的简化**：设计原文没有定义"多个触发符头"的语义，本草案取"只认第一个"以免嵌套数爆炸。列待定（§7.4）。
@@ -158,13 +158,13 @@ cast(req):
 - `action_count` = 动作树在**执行时产生的动作次数**，按 `count` 展开后计：
   ```text
   exec(spawn)  = spawn.count × (1 + Σ exec(p) for p in payloads + exec(trigger.actions))
-  exec(其他 op) = 1
+  exec(其他 op) = 1        # 含 refund_spirit；计入 action_count 与「已用执行次数」，见 §7.4.1 ④
   exec(null)    = 0
   ```
   例：`spawn(count=16, payloads=[explode, stun, drain])` → `16 × (1+3) = 64`。
 - `spawn_count` = `Σ spawn_projectile.count`（不是动作对象个数）。
 - `max_depth` = 动作树里 `trigger.depth` 的最大值（主句动作 depth=0）。
-- **钳制算法**：单个 spawn 的 `per = 1 + Σ exec(payload) + exec(trigger.actions)`；`count = min(请求 count, floor((64 − 已用执行次数) / per), 32 − 已用投射物)`；被钳制时记对应事件。被钳制到 0 → 该 spawn 不生成并停止展开。
+- **钳制算法**：单个 spawn 的 `per = 1 + Σ exec(payload) + exec(trigger.actions)`；`count = min(请求 count, floor((64 − 已用执行次数) / per), 32 − 已用投射物)`；被钳制时记对应事件。被钳制到 0 → 该 spawn 不生成并停止展开。动作/投射物**同时超限**时先动作后投射物（§7.4.1 ⑤）。
 - **截断不退灵力**（符已念出）；"截断"只影响动作，不影响"已扣费"。
 
 **代价**：极端组合（5 张分身 + 多符脚）会被截断而"看起来没放满"，玩家需要可读的 UI 提示（`budget_exhausted_*` 事件 → UI 提示音/文字，D1 的"可读"硬约束）。
@@ -180,7 +180,7 @@ cast(req):
 | 无效句 | 照常扣费（§2.6） |
 | `归` 返还 | `timing: sentence_end`，句末立即 `refund_spirit`（clamp ≤ spirit_max），是唯一能从动作里改灵力的操作 |
 | 回灵 | 不在 VM 内（调度层按 `regen_per_sec` 每 tick 回）；VM 只接收当前 `spirit` |
-| fizzle 的收尾 | 灵力不足导致整次施法结束时：**不做幻影符放置**（神智未变），不触发回符，游标停原处；下一次 cast 从原处重试 |
+| fizzle 的收尾 | 灵力不足导致整次施法结束时：**不做幻影符放置**（神智未变），不触发回符，游标停原处；下一次 cast 从原处重试。多主句中途 fizzle 的游标口径见 §7.4.1 ② |
 
 **为什么不用"念到哪算哪"**：主句原子让"这一发放不放得出来"成为玩家可预判的二元事件（法器可读性）；代价是"差 1 点灵力就整发哑火"，手感更硬。这是待拍板 #3。
 
@@ -205,11 +205,22 @@ cast(req):
 | 1 | 施法开始 | `sanity ≥ 33` 且 `phantom_slots ≠ []` → 清空幻影符（在牌堆构建前） | `phantom_slot_cleared` |
 | 2 | 施法开始 | `backlash` → 本次**整次**替换为 **1 个幻符**：灵力扣 `min(spirit, 正常全树成本)`，`backlash := false`，**不生成正常动作**，**不掷 15% 骰**，本次读到的禁符**不生效、不扣神智**；仍推进游标/判回符/判幻影符放置 | `backlash_consumed` |
 | 3 | 解析 | 解析主句 + 深度内触发子句，得符序列/成本/`has_forbidden`；不改任何状态 | — |
-| 4 | 15% 替换 | `sanity < 33` 且 **`!has_forbidden`** → `rng.phantom_roll < 0.15` 时把**主句第一个符胆**替换为幻符（`phantom_cast.reason="substitute"`，其符脚保留为 `payloads`，**成本不变**）；否则不替换（含禁符/已反噬时**不掷骰**） | `phantom_substitute` |
+| 4 | 15% 替换 | `sanity < 33` 且 **`!has_forbidden`** → `rng.phantom_roll < 0.15` 时把**主句第一个符胆**替换为幻符（`phantom_cast.reason="substitute"`，其符脚保留为 `payloads`，**成本不变**）；否则不替换（含禁符/已反噬时**不掷骰**）。替换句带触发符头时的细则见下表后的补写 | `phantom_substitute` |
 | 5 | 执行 | 逐句判费扣费、生成动作；禁符：`sanity = max(0, sanity - 20)`、`backlash := true`、**本次仍照常生效**（D3：代价落在下一次） | `forbidden_read`、`backlash_armed` |
 | 6 | 执行（子句） | 触发子句展开：扣子句灵力；子句里的禁符同样 −20 神智、置反噬（静态展开=预付费，见 §2.1） | `sub_fizzle_no_spirit` 等 |
 | 7 | 收尾 | `cursor == deck_len` → 回符：`cursor := 0`、`ready_at_tick = tick + recharge_ticks` | `round_end` |
 | 8 | 收尾 | `sanity < 33` 且 `phantom_slots == []` → 从**不含禁符的符位**中按 `rng.phantom_slot` 选 1 格放置幻影符（读牌时视为空位，不可移除） | `phantom_slot_added` |
+
+**第 4 步的补写：替换句带触发符头时（2026-11-15 T3 复审后补；语义未改，只补空白）**
+
+15% 替换只替换**符胆**。若被替换的那一句带触发符头（`敕·触` / `奉·时`）：
+
+- **触发子句不展开、不扣灵力、不计 `consumed`**：`phantom_cast`（§3.2）没有 `trigger` 字段，幻符不携带触发子句。
+- **游标停在子句首（不越过）**：子句的牌留待后续施法再读；因此若尚未读尽牌堆，**不回符**。
+- **本次成本 = 主句直接符（符头/符胆/符脚）成本之和**，维持"成本不变"；`consumed` 只含主句直接符（未回符时 `cursor_after = cursor + len(consumed)`，与 §6.3 口径一致）。
+- 该组合的**多句施法**（`sentences_per_cast > 1`）读法未定义，列 §7.4 待定；30 条用例不覆盖（VM-020 是替换句不带触发的成功路径）。
+
+**备选 A（列待拍板 #6，§7.3）**：保留触发子句，给 `phantom_cast` 增加 `trigger` 字段。代价：改 C-ACT 契约（§3.2 第 16 项）+ T4b 世界层要执行"幻符的延迟触发"；收益：`敕·触 + 幻符` 组合不被吞掉。
 
 **不变量（用例必须断言，T3 必须成立）**：
 
@@ -256,7 +267,7 @@ cast(req):
 | 13 | `extinguish_lantern` | `lanterns`(必填, 可小数) | 世界层 | 符胆 鬼火（阴性伤害，S-0004 七魄） |
 | 14 | `drain_life` | `amount`(必填) | 世界层 | 符脚 噬 |
 | 15 | `refund_spirit` | `amount`(必填) | **VM** | 符脚 归 |
-| 16 | `phantom_cast` | `spell`(必填幻符 id)、`reason`(必填: "backlash"/"substitute")、`effect`(必填: 幻符表里的动作对象)、`payloads`=[] | 世界层 | S-0004 幻符 |
+| 16 | `phantom_cast` | `spell`(必填幻符 id)、`reason`(必填: "backlash"/"substitute")、`effect`(必填: 幻符表里的动作对象)、`payloads`=[]。**无 `trigger` 字段**（替换句带触发符头时按 §2.7 第 4 步补写处理） | 世界层 | S-0004 幻符 |
 
 嵌套结构：
 
@@ -349,7 +360,7 @@ trigger:
 | `accepted` | bool | 是否受理 |
 | `reject_reason` | "recharging"\|"empty_deck"\|null | 拒绝原因 |
 | `actions` | [Action] | C-ACT 动作列表 |
-| `consumed` | [card_id] | 读出的符（按读出顺序，含触发子句；反噬施法也返回，作为成本依据） |
+| `consumed` | [card_id] | 读出的符（按读出顺序，含触发子句；反噬施法也返回，作为成本依据）。**例外**：15% 替换句的触发子句不计入（§2.7 第 4 步补写） |
 | `spirit_after` / `sanity_after` / `backlash_after` / `phantom_slots_after` / `cursor_after` | — | 施法后状态 |
 | `round_ended` | bool | 是否触发回符 |
 | `ready_at_tick_after` | int | 回符后 = `tick + recharge_ticks`；否则不变 |
@@ -642,7 +653,7 @@ cd /tmp/gameV0 && python3 tests/vm_cases/validate_cases.py
 | 触发子句静态展开（预付费） | 是 | 确定性与可测性（C46） | 要加 tick 级运行时用例，成本高 |
 | 子句预读消耗共享游标 | 是 | 与设计伪代码 `cast_sub(wand, deck)` 一致 | — |
 
-### 7.3 待用户拍板的取舍（5 条）
+### 7.3 待用户拍板的取舍（6 条）
 
 | # | 取舍 | 现状（草案选择） | 替代方案 | 代价 / 争议 |
 |---|---|---|---|---|
@@ -651,6 +662,7 @@ cd /tmp/gameV0 && python3 tests/vm_cases/validate_cases.py
 | 3 | **灵力不足的粒度** | 整句不念 + 本轮结束 | 念到哪算哪（逐符扣，能放几张放几张） | 选前者：玩家可预判"这发放不放得出"；选后者：手感更连续，但"差 1 点灵力"会变成部分生效，动作列表不可预测 |
 | 4 | **归 的灵力成本** | 0（返还 8），与 S-0002 符脚 +8~+30 冲突；反噬施法灵力不足时扣 `min(spirit, 成本)` | 归 +8 且返还 16（净 −8，卡面 net 2 不成立）；反噬不足时不发（可被空灵逃避） | 涉及 F-0004 的"探索自循环"是否成立：归 若真收 8，土遁·归 净耗 10，探索循环成本高 5 倍。**这条影响玩法，最需要你拍板** |
 | 5 | **三个上限的具体数值** | 深度 3 / 动作 64 / 投射物 32 | 深度 2 或 4；动作 32；投射物 16 | 影响"组合爆炸"的乐趣上限与性能；建议先按 3/64/32 实现，试玩（T5）后调 |
+| 6 | **15% 替换句带触发符头** | 替换只换符胆；触发子句**不展开、不扣灵力、不计 consumed**，游标停在子句首（不越过）；本次成本 = 主句直接符成本（§2.7 第 4 步补写） | 备选 A：保留触发子句，给 `phantom_cast` 增加 `trigger` 字段 | 现状：不改 C-ACT、确定性强；代价是替换会吞掉这一句的触发（`敕·触 + 幻符` 组合失效）。备选 A 要改 C-ACT（§3.2 第 16 项）+ T4b 世界层执行"幻符的延迟触发" |
 
 ### 7.4 待定与数据缺口（不阻塞 T3，但 T3/T4 要知道）
 
@@ -664,7 +676,23 @@ cd /tmp/gameV0 && python3 tests/vm_cases/validate_cases.py
 | 五雷"导电物质传导" | 反应表缺"施法触发"类型（S-0005 open_questions） | 本草案五雷只做伤害动作，不传导 |
 | 多个触发符头叠加语义 | 未定义 | 本草案取"每句只认第一个触发符头" |
 | 投射物 `on_hit` 未命中（ttl 到期） | 由 T4 运行时决定 | VM 只生成动作；T4 记运行时事件 |
+| 多句施法 + 15% 替换 + 触发符头 | 未定义（§2.7 第 4 步补写只固定 `sentences_per_cast=1`）；**T3 取最保守读法：替换句后不再读后续主句** | 30 条用例不覆盖；T4b 若需要不同口径，先补规则和用例再改实现 |
+| 预算钳到 0 停止展开后的收尾 | 未定义；**T3 取 `cursor = 起始 + 已 consumed`，且仍走 §2.7 步骤 7/8（回符判定 / 幻影符放置）**——与 §2.5 fizzle「不做幻影符放置」不同 | 截断是「已念出、扣费、动作被钳」，fizzle 是「整句没念出」，本草案倾向保留两者不同、不统一成 fizzle（统一需 vm-impl 再改并补用例） |
+| 替换句带 `归`（sentence_end 符脚） | 未定义；**T3 取 `归` 仍挂顶层、句末执行 `refund_spirit`**（§1.3 / §2.5）；§2.7 补写的「符脚保留为 `payloads`」只指载荷类符脚 | 30 条用例不覆盖；若 T4b 要据此做 combo（土遁·归 + 幻符），先补用例 |
 | 神智 = 0 入魔 | M1 才做（S-0004） | T3 只需 clamp 到 0，不触发入魔 |
+
+#### 7.4.1 2026-11-15 补写的边界口径（T3 复审后补；实现已固定，语义未改）
+
+以下 6 条原先只存在于实现选择里、规格没写清；现写回规格。每条都不改已冻结的语义，也不改 30 条用例的期望（补丁后 `validate_cases.py` 仍 30/30 通过）。
+
+1. **`sub_fizzle_no_spirit` 的 `consumed` / 游标**（§2.3 第 5 条）：子句灵力不足时，子句的符按"解析已读出"处理——计入 `consumed`、游标按解析推进到子句末，但子句**不扣费、不展开**（`trigger = null`），记 `sub_fizzle_no_spirit`。
+2. **多主句中途 fizzle 的游标**（§2.5）：`cursor_after = 起始游标 + 已 consumed 数`（已念的句符已消耗，fizzle 句停在句首），与 §6.3 的游标口径及 T1 `validate_cases.py` 的自洽检查一致。
+3. **`rng.phantom_slot` / `rng.phantom_card` 为 null 的兜底**（§2.7 第 2/4/8 步）：`phantom_slot = null` → **不放置**幻影符（不自造候选回退）；`phantom_card = null` → 反噬施法的 `phantom_cast.effect = null`，15% 替换**不掷骰**（不伪造幻符）。
+4. **`refund_spirit` 的执行次数**（§2.4）：它是"其他 op"，`exec = 1`：计入 `action_count`，**也计入「已用执行次数」预算**（会挤占后续 spawn 的额度）；它自身不参与 spawn 的 `count` 钳制、也不单独截断。
+5. **动作/投射物同时超限的事件顺序**（§2.4）：先按 64 钳动作（`budget_exhausted_action`），再按 32 钳投射物（`budget_exhausted_projectile`），两个事件按此顺序入列。
+6. **一次施法读到多张禁符**（§2.7 第 5 步）：逐张按卡片顺序 −20 神智，各记一条 `forbidden_read` 与 `backlash_armed`（`backlash` 状态位幂等；卡表只有 1 张禁符，30 条用例不覆盖）。
+
+> **T3 实现取最保守读法**：§7.4 表中标「未定义」的边界项，T3 统一按最保守 / 可复现读法实现（与 §7.4.1 同）。T4b 若需要不同口径，**先补规则 + 用例再改实现**，不要只改代码；本文件仍为草案 v0.1｜待用户审定，新增的行不改变已冻结语义。
 
 ### 7.5 T3 实现清单与验收
 
@@ -755,6 +783,7 @@ expand(sentence, depth, budget):
 | 日期 | 版本 | 变更 |
 |---|---|---|
 | 2026-11-15 | 0.1（草案） | 首版：回答 T1 的 8 个问题；定义 C-VM / C-ACT / C-CASE；30 条用例；标待用户审定 |
+| 2026-11-15 | 0.1（澄清，**不计版本变更**） | T3 复审补丁：§2.7 第 4 步补「替换句带触发符头」的规则（只换符胆；子句不展开/不扣灵力/不计 consumed；游标停子句首；成本=主句直接符成本）；§7.3 新增待拍板 #6（备选 A 保留触发需给 `phantom_cast` 加 `trigger`）；§7.4 新增 §7.4.1 六条边界口径（①sub_fizzle 的 consumed/游标 ②多主句 fizzle 游标 ③rng null 兜底 ④refund 执行次数 ⑤上限事件顺序 ⑥多张禁符）与一条待定。**语义未改，只补空白**；仍为草案 v0.1｜待用户审定 |
 
 ## 附录 C：与其它文档的关系
 

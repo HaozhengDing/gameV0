@@ -66,14 +66,16 @@
 | 契约 | 文件（计划） | 谁定 | 何时 | 下游 |
 |---|---|---|---|---|
 | C-DATA 数据格式 | `data/README.md` + `tools/validate_data.py` | 已有 v0；T0 守护 | M0 W1 | sim、VM、关卡、经济 |
-| C-VM 符箓语义 | `docs/tech/talisman-vm-spec.md` + `tests/vm_cases/` | T1 | M0 W2 | T3、T4、所有符的内容 |
-| C-ACT VM 动作 → 世界 | 同上规格中的"动作列表格式"一节 | T1 | M0 W2 | T4、M1 战斗 |
-| C-SIM 模拟接口 | `sim_core` 的公开头文件 | T2 | M0 W3 | T4、M1 全部玩法 |
+| C-VM 符箓语义 | `docs/tech/talisman-vm-spec.md` + `tests/vm_cases/` | T1（草案 v0.1 已出，待用户审定） | M0 W2 | T3、T4、所有符的内容 |
+| C-ACT VM 动作 → 世界 | 同上规格 §3（16 种动作 + 物质 id 来源） | T1（草案 v0.1 已出） | M0 W2 | T4、M1 战斗 |
+| C-SIM 模拟接口 | `sim_core/include/sim/c_sim.h`（**已冻结 v1**） | T2（已出） | M0 W3 | T4、M1 全部玩法 |
 | C-EVT 世界事件 | 反应发生、受伤、熄灯、神智变化等事件格式 | M1 计划 | M1 开头 | 玩法、UI、音频、可读性表达 |
 | C-TEXT 文本键 | 所有玩家可见文本走 key，不写死在代码里 | M1 计划 | M1 开头 | UI、规矩文本、本地化、版号词表替换（设计原文风险 1） |
 | C-SAVE 存档 | chunk 差分 + 实体 + seed（设计原文 4.6） | M2 计划 | M2 开头 | 祠堂怨灵、Demo |
 
 **改契约的规矩**：版本号 +1；写一篇 log，列出受影响的下游任务；`tools/validate_data.py` 能检查的就加检查。
+
+**2026-11-15 契约状态**：C-DATA 已生效（T0 + CI 守护，新增 C-VM 用例守护）；**C-SIM v1 已冻结**（`sim_core/include/sim/c_sim.h`，破坏性改动必须版本号 +1，log -08）；**C-VM / C-ACT 草案 v0.1 已落地**（`docs/tech/talisman-vm-spec.md` + `tests/vm_cases/` 30 条，待用户审定，log -09）；C-VM 动作由谁在世界层执行见 spec §3.1/§3.2，T4 接入时以该节为准。
 
 ### 3.4 打桩：把硬依赖变软
 

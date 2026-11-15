@@ -1,4 +1,5 @@
 # 本地构建产物
 build/
+build-*/
 bench-frames/
 *.png
