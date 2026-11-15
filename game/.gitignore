@@ -1,0 +1,7 @@
+# Godot 4 导入缓存与构建产物
+.godot/
+build/
+bin/*.dll
+bin/*.so
+bin/*.pdb
+bin/*.dylib

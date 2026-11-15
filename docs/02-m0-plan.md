@@ -140,6 +140,8 @@
 拆成两段（理由见 03 §5）：
 
 - **T4a（W3–W4）**：Godot 4 项目 + GDExtension 构建链 + 角色移动；`sim_core` 未就绪时用只画格子的桩。完成标准：一条命令构建出可运行的项目；桩换成真 `sim_core` 时，Godot 侧代码不用改。
+
+**2026-11-16 进度**：T4a 已在用户的 Windows 电脑（Tailscale 直连）跑通——Godot 4.5 + godot-cpp 4.5，一键构建 `game/build.bat`/`build.sh`，GDExtension 直接接入已冻结的 C-SIM v1（无需桩）；headless 自检 `SMOKE_OK`、主场景 120 帧 `MAIN_EXIT=0`。复现/前置/限制见 `game/README.md`，记录见 docs/log/2026-11-16-03-t4a-godot-gdextension.md。
 - **T4b（W5–W7）**：接入真 `sim_core` 和 VM，做内容。
 
 **T4b 是什么**：通过 GDExtension 接入 `sim_core` 和 VM，做出 10 分钟的可玩内容：

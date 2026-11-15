@@ -1,0 +1,13 @@
+; sim_core 的 GDExtension 入口（C-SIM v1）。库文件由 game/build.bat / build.sh 生成到 bin/。
+[configuration]
+
+entry_symbol = "gdsim_library_init"
+compatibility_minimum = "4.4"
+reloadable = true
+
+[libraries]
+
+windows.debug.x86_64 = "res://bin/gdsim.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://bin/gdsim.windows.template_release.x86_64.dll"
+linux.debug.x86_64 = "res://bin/libgdsim.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://bin/libgdsim.linux.template_release.x86_64.so"
