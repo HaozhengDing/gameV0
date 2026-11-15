@@ -1,0 +1,101 @@
+{
+  "schema": "gamev0.room/v0.1",
+  "version": "0.1",
+  "id": "room-01-silver-pit",
+  "name": "水银池",
+  "status": "draft",
+  "size": {
+    "w": 24,
+    "h": 14
+  },
+  "tile_size": 16,
+  "legend": {
+    "#": "rock",
+    ".": "empty",
+    "~": "quicksilver",
+    "w": "water",
+    "c": "coal",
+    "n": "saltpeter",
+    "b": "bamboo"
+  },
+  "grid": [
+    "########################",
+    "#......................#",
+    "#.......nn.............#",
+    "#..cc...n..........c...#",
+    "#...c.............c....#",
+    "#......................#",
+    "#.............~~~~~....#",
+    "#.............~~~~~..b.#",
+    "#.b...........~~~~~..b.#",
+    "#.b...........~~~~~....#",
+    "#..www.................#",
+    "#..www.................#",
+    "#......................#",
+    "########################"
+  ],
+  "entities": [
+    {
+      "id": "exit-hub",
+      "type": "exit",
+      "x": 2,
+      "y": 1,
+      "payload": {
+        "to": "hub-cave",
+        "label": "返回洞天"
+      }
+    },
+    {
+      "id": "rule-stele-01",
+      "type": "rule_stele",
+      "x": 5,
+      "y": 5,
+      "payload": {
+        "rule_id": "no-open-flame"
+      }
+    },
+    {
+      "id": "loot-cinnabar",
+      "type": "loot",
+      "x": 20,
+      "y": 10,
+      "payload": {
+        "materials": [
+          "cinnabar"
+        ],
+        "silver": 20
+      }
+    },
+    {
+      "id": "prop-candle",
+      "type": "prop",
+      "x": 12,
+      "y": 2,
+      "payload": {
+        "kind": "candle",
+        "note": "靠近瓦斯会引爆"
+      }
+    },
+    {
+      "id": "anchor-mob",
+      "type": "spawn_anchor",
+      "x": 16,
+      "y": 2,
+      "payload": {
+        "table": "mobs",
+        "count": 1
+      }
+    }
+  ],
+  "hazards": [
+    "quicksilver_no_regen"
+  ],
+  "intended_rules": [
+    "no-open-flame"
+  ],
+  "notes": [
+    "手工房间：水银池把「重液体/不能越过旧日之物」变成地形",
+    "蜡烛是明火，靠近瓦斯房间会连锁爆炸（教学）",
+    "后续可替换为 tile 数据或 Godot 场景，格式不变"
+  ]
+}

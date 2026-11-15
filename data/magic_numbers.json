@@ -1,0 +1,183 @@
+{
+  "schema": "gamev0.magic_numbers/v0.1",
+  "version": "0.1",
+  "updated": "2026-11-15",
+  "description": "全局调参（对齐 P0 卡片与《刍狗》设计文档 3.x）；数值为 v0 占位。",
+  "design": {
+    "prototype_layers": 1,
+    "strict_permadeath": true,
+    "meta_progression": "knowledge_only",
+    "yin_world_from_layer": 3,
+    "fate_choose_three": true,
+    "fate_reroll_allowed": false,
+    "hidden_fate_cost": true
+  },
+  "player": {
+    "hp": 100,
+    "lanterns": 7,
+    "sanity": 100,
+    "spirit": 50,
+    "spirit_regen_per_sec": 10,
+    "slots": 4,
+    "start_talismans": [
+      "flying_sword",
+      "urgent_order"
+    ],
+    "start_items": [
+      "gourd",
+      "earth_escape_seal"
+    ]
+  },
+  "sanity": {
+    "thresholds": {
+      "shuangling": 66,
+      "taiguang": 33,
+      "youjing": 0
+    },
+    "witness_drain_per_sec": 2,
+    "forbidden_book_cost": 20,
+    "forbidden_threshold": 33,
+    "yin_damage_lanterns": [
+      0.2,
+      0.5
+    ]
+  },
+  "elements": {
+    "counter_multiplier": 1.5,
+    "countered_multiplier": 0.6,
+    "same_multiplier": 1
+  },
+  "economy": {
+    "silver_per_layer_base": 300,
+    "layer_multiplier": 1.5,
+    "talisman_price_t1": 80,
+    "talisman_tier_multiplier": 2,
+    "wand_price_base": 250,
+    "papercraft_cost_ratio": 0.5,
+    "paper_cost": 20
+  },
+  "enemy_curve": {
+    "hp_multiplier_per_layer": 1.8,
+    "damage_multiplier_per_layer": 1.5
+  },
+  "layers": [
+    {
+      "id": 1,
+      "name": "矿井",
+      "mob_hp": [
+        10,
+        30
+      ],
+      "elite_hp": [
+        60,
+        120
+      ],
+      "mob_damage": [
+        3,
+        8
+      ]
+    },
+    {
+      "id": 2,
+      "name": "地宫",
+      "mob_hp": [
+        20,
+        60
+      ],
+      "elite_hp": [
+        150,
+        300
+      ],
+      "mob_damage": [
+        6,
+        15
+      ]
+    },
+    {
+      "id": 3,
+      "name": "龙脉",
+      "mob_hp": [
+        40,
+        120
+      ],
+      "elite_hp": [
+        300,
+        600
+      ],
+      "mob_damage": [
+        10,
+        25
+      ]
+    },
+    {
+      "id": 4,
+      "name": "水府",
+      "mob_hp": [
+        80,
+        200
+      ],
+      "elite_hp": [
+        600,
+        1200
+      ],
+      "mob_damage": [
+        15,
+        35
+      ]
+    },
+    {
+      "id": 5,
+      "name": "幽都",
+      "mob_hp": [
+        120,
+        350
+      ],
+      "elite_hp": [
+        1000,
+        2000
+      ],
+      "mob_damage": [
+        20,
+        50
+      ]
+    },
+    {
+      "id": 6,
+      "name": "归墟",
+      "mob_hp": [
+        200,
+        600
+      ],
+      "elite_hp": [
+        2000,
+        4000
+      ],
+      "mob_damage": [
+        30,
+        80
+      ]
+    },
+    {
+      "id": 7,
+      "name": "混沌",
+      "mob_hp": null,
+      "elite_hp": "不可伤害",
+      "mob_damage": "神智伤害"
+    }
+  ],
+  "layer_01": {
+    "mobs": [
+      4,
+      6
+    ],
+    "elites": [
+      0,
+      1
+    ],
+    "duration_minutes": 15,
+    "silver": [
+      250,
+      350
+    ]
+  }
+}

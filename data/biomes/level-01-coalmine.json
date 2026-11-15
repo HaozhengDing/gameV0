@@ -1,0 +1,286 @@
+{
+  "schema": "gamev0.biome/v0.1",
+  "version": "0.1",
+  "updated": "2026-11-15",
+  "id": "level-01-coalmine",
+  "name": "矿井（第 1 层）",
+  "layer": 1,
+  "status": "draft",
+  "topology": {
+    "type": "wang_tile",
+    "wang_template": "assets/biomes/coalmine_wang.png",
+    "size": [
+      256,
+      256
+    ],
+    "rooms_mode": "spliced",
+    "note": "程序化拓扑 + 手工房间拼接，对应 Noita 的 biome_impl 模式"
+  },
+  "theme": {
+    "background": "assets/biomes/coalmine_bg.png",
+    "music": "coalmine",
+    "ambience": "cave",
+    "palette": {
+      "rock": 0.55,
+      "coal": 0.2,
+      "saltpeter": 0.1,
+      "sulfur": 0.05,
+      "cinnabar": 0.05,
+      "quicksilver": 0.03,
+      "water": 0.02
+    }
+  },
+  "spawn_table": {
+    "mode": "probability",
+    "rolls_per_room": [
+      0,
+      2
+    ],
+    "mobs": [
+      {
+        "id": "mob-coal-ghost",
+        "entity": "enemy-coal-ghost",
+        "name": "矿鬼",
+        "prob": 0.55,
+        "min": 1,
+        "max": 3,
+        "mean": 2,
+        "sharpness": 2,
+        "stage": "early",
+        "stats": {
+          "hp": [
+            10,
+            30
+          ],
+          "damage": [
+            3,
+            8
+          ],
+          "drop": {
+            "silver": [
+              10,
+              20
+            ],
+            "materials": [
+              "coal"
+            ]
+          }
+        }
+      },
+      {
+        "id": "mob-earth-worm",
+        "entity": "enemy-earth-worm",
+        "name": "土蝼",
+        "prob": 0.3,
+        "min": 1,
+        "max": 2,
+        "mean": 1,
+        "sharpness": 3,
+        "stage": "mid",
+        "stats": {
+          "hp": [
+            15,
+            35
+          ],
+          "damage": [
+            4,
+            9
+          ],
+          "drop": {
+            "silver": [
+              5,
+              15
+            ]
+          }
+        }
+      },
+      {
+        "id": "mob-gas-wisp",
+        "entity": "enemy-gas-wisp",
+        "name": "硫烟鬼火",
+        "prob": 0.15,
+        "min": 1,
+        "max": 1,
+        "mean": 1,
+        "sharpness": 4,
+        "stage": "mid",
+        "stats": {
+          "hp": [
+            8,
+            16
+          ],
+          "damage": [
+            2,
+            6
+          ],
+          "tags": [
+            "fire",
+            "hazard"
+          ]
+        }
+      }
+    ],
+    "elites": [
+      {
+        "id": "elite-painted-skin",
+        "entity": "enemy-painted-skin",
+        "name": "画皮（借位测试）",
+        "prob": 0.35,
+        "min": 0,
+        "max": 1,
+        "mean": 0.35,
+        "sharpness": 3,
+        "stage": "mid",
+        "stats": {
+          "hp": [
+            150,
+            300
+          ],
+          "damage": [
+            6,
+            15
+          ],
+          "drop": {
+            "silver": [
+              50,
+              120
+            ],
+            "materials": [
+              "cinnabar"
+            ]
+          }
+        },
+        "note": "P0 卡片允许从第 2 层借位测试"
+      }
+    ],
+    "boss": {
+      "id": "boss-drought-demon",
+      "entity": "enemy-drought-demon",
+      "name": "旱魃",
+      "hp": 420,
+      "damage": [
+        10,
+        18
+      ],
+      "weakness": [
+        "水",
+        "阴"
+      ],
+      "resist": [
+        "火"
+      ],
+      "drop": {
+        "silver": 150,
+        "materials": [
+          "cinnabar"
+        ],
+        "talisman": "bifang_fire"
+      },
+      "arena": "room-boss-coalmine",
+      "note": "逼玩家第一次用葫芦装环境水"
+    },
+    "note": "prob 为相对权重；min/max/mean/sharpness 参考 Noita 的分布表格式（v1 先线性采样）"
+  },
+  "rooms": [
+    {
+      "ref": "room-01-silver-pit",
+      "weight": 1,
+      "count": [
+        1,
+        1
+      ],
+      "stage": "mid",
+      "aabb": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 14
+      }
+    },
+    {
+      "ref": "room-02-gas-pocket",
+      "weight": 1,
+      "count": [
+        1,
+        2
+      ],
+      "stage": "early",
+      "aabb": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 14
+      }
+    }
+  ],
+  "hazards": [
+    {
+      "id": "gas_explosion",
+      "trigger": "fire",
+      "materials": [
+        "sulfur",
+        "coal",
+        "saltpeter"
+      ],
+      "damage": 60,
+      "radius": 80,
+      "note": "明火进入瓦斯囊"
+    },
+    {
+      "id": "collapse",
+      "trigger": "dig_fast",
+      "damage": 15,
+      "note": "挖掘过快落石"
+    },
+    {
+      "id": "quicksilver_no_regen",
+      "trigger": "in_quicksilver",
+      "effect": "spirit_regen_disabled",
+      "note": "水银池压制回灵"
+    }
+  ],
+  "rules": [
+    {
+      "id": "no-open-flame",
+      "text": "矿里不能用明火",
+      "effect": "触发 gas_explosion",
+      "discovery": "矿工口述/碑文",
+      "type": "true"
+    },
+    {
+      "id": "do-not-call-return",
+      "text": "水银池边不要念「归」",
+      "effect": "回灵暂时失效",
+      "discovery": "村民八卦",
+      "type": "false",
+      "note": "假规矩：实际是提示水银危险"
+    }
+  ],
+  "economy": {
+    "silver": [
+      250,
+      350
+    ],
+    "duration_minutes": 15,
+    "mobs": [
+      4,
+      6
+    ],
+    "elites": [
+      0,
+      1
+    ]
+  },
+  "exits": [
+    {
+      "id": "exit-hub",
+      "to": "hub-cave",
+      "type": "safe_room"
+    }
+  ],
+  "design_notes": [
+    "P0 L-0001 的数据化：刷怪概率表 + 2 个手工房间 + BOSS 房",
+    "房间只做骨架，实体/材质以 JSON 引用，不接引擎",
+    "瓦斯/水银/塌方是层的三大 hazard，教学靠碑文与试错"
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "schema": "gamev0.room/v0.1",
+  "version": "0.1",
+  "id": "room-02-gas-pocket",
+  "name": "瓦斯囊",
+  "status": "draft",
+  "size": {
+    "w": 24,
+    "h": 14
+  },
+  "tile_size": 16,
+  "legend": {
+    "#": "rock",
+    ".": "empty",
+    "u": "sulfur",
+    "c": "coal",
+    "n": "saltpeter",
+    "w": "water",
+    "b": "bamboo"
+  },
+  "grid": [
+    "########################",
+    "#......................#",
+    "#......................#",
+    "#...uuuu.nn.cccc.b.....#",
+    "#...uuuu.n..cccc.bb....#",
+    "#...uuuu....cccc.......#",
+    "#...uuuu....cccc.......#",
+    "#......................#",
+    "#.b....................#",
+    "#.b...............wwww.#",
+    "#.................wwww.#",
+    "#.................wwww.#",
+    "#......................#",
+    "########################"
+  ],
+  "entities": [
+    {
+      "id": "exit-hub-02",
+      "type": "exit",
+      "x": 2,
+      "y": 1,
+      "payload": {
+        "to": "hub-cave",
+        "label": "返回洞天"
+      }
+    },
+    {
+      "id": "rule-stele-02",
+      "type": "rule_stele",
+      "x": 3,
+      "y": 10,
+      "payload": {
+        "rule_id": "no-open-flame"
+      }
+    },
+    {
+      "id": "gas-vent",
+      "type": "prop",
+      "x": 10,
+      "y": 8,
+      "payload": {
+        "kind": "gas_vent",
+        "note": "明火=爆炸"
+      }
+    },
+    {
+      "id": "loot-sulfur",
+      "type": "loot",
+      "x": 20,
+      "y": 4,
+      "payload": {
+        "materials": [
+          "sulfur"
+        ],
+        "silver": 10
+      }
+    },
+    {
+      "id": "anchor-mob-02",
+      "type": "spawn_anchor",
+      "x": 13,
+      "y": 10,
+      "payload": {
+        "table": "mobs",
+        "count": 1
+      }
+    }
+  ],
+  "hazards": [
+    "gas_explosion"
+  ],
+  "intended_rules": [
+    "no-open-flame"
+  ],
+  "notes": [
+    "手工房间：硫磺/煤/硝石构成可引爆的瓦斯囊",
+    "蜡烛/毕方火/煞进入 → 爆炸 60 伤 / 80 半径",
+    "水可用于灭火/降温，但会消耗资源"
+  ]
+}

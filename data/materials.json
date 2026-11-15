@@ -1,0 +1,396 @@
+{
+  "schema": "gamev0.materials/v0.1",
+  "version": "0.1",
+  "updated": "2026-11-15",
+  "description": "《刍狗》五行物质表 v0（对齐 P0 系统卡 S-0003）。数值为占位，后续从原型调参。",
+  "conventions": {
+    "density": "水 = 1.0；用于浮沉/堆积",
+    "temperature": "摄氏度",
+    "state": [
+      "liquid",
+      "powder",
+      "solid",
+      "gas"
+    ],
+    "element": [
+      "金",
+      "木",
+      "水",
+      "火",
+      "土"
+    ],
+    "polarity": [
+      "阴",
+      "阳",
+      "none"
+    ],
+    "extends": "浅合并：继承父项字段，子项覆盖同名字段；数组整体替换"
+  },
+  "materials": [
+    {
+      "id": "water",
+      "name": "水",
+      "ui_key": "$mat_water",
+      "state": "liquid",
+      "element": "水",
+      "polarity": "none",
+      "density": 1,
+      "temperature": 20,
+      "flammable": false,
+      "tags": [
+        "liquid",
+        "water",
+        "extinguish",
+        "coolant"
+      ],
+      "color": "#4A78C8"
+    },
+    {
+      "id": "black_dog_blood",
+      "extends": "water",
+      "name": "黑狗血",
+      "ui_key": "$mat_black_dog_blood",
+      "element": "火",
+      "polarity": "阳",
+      "density": 1.05,
+      "tags": [
+        "liquid",
+        "blood",
+        "yang",
+        "spirit_bane"
+      ],
+      "color": "#7A1F1F"
+    },
+    {
+      "id": "quicksilver",
+      "name": "水银",
+      "ui_key": "$mat_quicksilver",
+      "state": "liquid",
+      "element": "金",
+      "polarity": "none",
+      "density": 13.6,
+      "temperature": 20,
+      "flammable": false,
+      "tags": [
+        "liquid",
+        "metal",
+        "heavy",
+        "eldritch_repellent",
+        "toxic"
+      ],
+      "color": "#B8C0C8"
+    },
+    {
+      "id": "coal",
+      "name": "煤",
+      "ui_key": "$mat_coal",
+      "state": "powder",
+      "element": "土",
+      "polarity": "none",
+      "density": 1.4,
+      "flammable": true,
+      "ignition_temperature": 300,
+      "tags": [
+        "powder",
+        "fuel",
+        "carbon"
+      ],
+      "color": "#2B2B2B"
+    },
+    {
+      "id": "saltpeter",
+      "name": "硝石",
+      "ui_key": "$mat_saltpeter",
+      "state": "powder",
+      "element": "土",
+      "polarity": "none",
+      "density": 2.1,
+      "flammable": false,
+      "tags": [
+        "powder",
+        "oxidizer"
+      ],
+      "color": "#D8D2C0"
+    },
+    {
+      "id": "sulfur",
+      "name": "硫磺",
+      "ui_key": "$mat_sulfur",
+      "state": "powder",
+      "element": "火",
+      "polarity": "none",
+      "density": 2,
+      "flammable": true,
+      "ignition_temperature": 250,
+      "tags": [
+        "powder",
+        "fuel",
+        "toxic_smoke"
+      ],
+      "color": "#D9C63A"
+    },
+    {
+      "id": "cinnabar",
+      "name": "朱砂",
+      "ui_key": "$mat_cinnabar",
+      "state": "powder",
+      "element": "火",
+      "polarity": "none",
+      "density": 8.1,
+      "flammable": false,
+      "tags": [
+        "powder",
+        "mineral",
+        "ritual",
+        "talisman_ink"
+      ],
+      "color": "#B23A2E"
+    },
+    {
+      "id": "lime",
+      "name": "石灰",
+      "ui_key": "$mat_lime",
+      "state": "powder",
+      "element": "土",
+      "polarity": "none",
+      "density": 3.3,
+      "flammable": false,
+      "tags": [
+        "powder",
+        "exothermic_water"
+      ],
+      "color": "#E8E2D0"
+    },
+    {
+      "id": "glutinous_rice",
+      "name": "糯米",
+      "ui_key": "$mat_glutinous_rice",
+      "state": "powder",
+      "element": "木",
+      "polarity": "none",
+      "density": 0.8,
+      "flammable": false,
+      "tags": [
+        "powder",
+        "organic",
+        "purifier"
+      ],
+      "color": "#F2EAD8"
+    },
+    {
+      "id": "rock",
+      "name": "岩",
+      "ui_key": "$mat_rock",
+      "state": "solid",
+      "element": "土",
+      "polarity": "none",
+      "density": 2.6,
+      "flammable": false,
+      "tags": [
+        "solid",
+        "static",
+        "ground"
+      ],
+      "color": "#6B6258"
+    },
+    {
+      "id": "bamboo",
+      "name": "竹木",
+      "ui_key": "$mat_bamboo",
+      "state": "solid",
+      "element": "木",
+      "polarity": "none",
+      "density": 0.7,
+      "flammable": true,
+      "ignition_temperature": 200,
+      "tags": [
+        "solid",
+        "wood",
+        "fuel",
+        "buildable"
+      ],
+      "color": "#8FA05A"
+    },
+    {
+      "id": "yin_qi",
+      "name": "阴气",
+      "ui_key": "$mat_yin_qi",
+      "state": "gas",
+      "element": "水",
+      "polarity": "阴",
+      "density": 0.1,
+      "temperature": 10,
+      "flammable": false,
+      "tags": [
+        "gas",
+        "yin",
+        "spirit",
+        "purgeable"
+      ],
+      "color": "#3A4A5A"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "r-black-powder",
+      "name": "黑火药",
+      "inputs": [
+        "saltpeter",
+        "sulfur",
+        "coal"
+      ],
+      "trigger": {
+        "type": "heat",
+        "min_temperature": 120
+      },
+      "result": {
+        "type": "explosion",
+        "damage": 25,
+        "radius": 40
+      },
+      "p0_ref": "P0 反应表 #1"
+    },
+    {
+      "id": "r-lime-steam",
+      "name": "石灰放热",
+      "inputs": [
+        "lime",
+        "water"
+      ],
+      "trigger": {
+        "type": "contact"
+      },
+      "result": {
+        "type": "heat_cloud",
+        "damage": 5,
+        "radius": 25,
+        "duration": 1,
+        "tags": [
+          "steam"
+        ]
+      },
+      "note": "蒸汽材质 v2 补",
+      "p0_ref": "P0 反应表 #2"
+    },
+    {
+      "id": "r-rice-purify",
+      "name": "糯米净阴",
+      "inputs": [
+        "glutinous_rice",
+        "yin_qi"
+      ],
+      "trigger": {
+        "type": "contact"
+      },
+      "result": {
+        "type": "purify",
+        "removes": "yin_qi"
+      },
+      "note": "v1 用阴气替代尸气",
+      "p0_ref": "P0 反应表 #3"
+    },
+    {
+      "id": "r-dog-blood-spirit",
+      "name": "狗血灼鬼",
+      "inputs": [
+        "black_dog_blood"
+      ],
+      "target_tags": [
+        "spirit"
+      ],
+      "trigger": {
+        "type": "contact"
+      },
+      "result": {
+        "type": "damage",
+        "damage": 20,
+        "damage_type": "阳"
+      },
+      "p0_ref": "P0 反应表 #4"
+    },
+    {
+      "id": "r-quicksilver-ward",
+      "name": "水银界",
+      "inputs": [
+        "quicksilver"
+      ],
+      "target_tags": [
+        "eldritch"
+      ],
+      "trigger": {
+        "type": "contact"
+      },
+      "result": {
+        "type": "barrier",
+        "effect": "eldritch_cannot_cross"
+      },
+      "p0_ref": "P0 反应表 #5"
+    },
+    {
+      "id": "r-cinnabar-talisman",
+      "name": "朱砂画符",
+      "inputs": [
+        "cinnabar"
+      ],
+      "target_tags": [
+        "paper"
+      ],
+      "trigger": {
+        "type": "contact"
+      },
+      "result": {
+        "type": "temporary_talisman_slot",
+        "value": 1,
+        "duration": 60
+      },
+      "note": "v1 用 paper tag；墨 v2 补",
+      "p0_ref": "P0 反应表 #6"
+    },
+    {
+      "id": "r-sulfur-toxic-smoke",
+      "name": "硫磺毒烟",
+      "inputs": [
+        "sulfur"
+      ],
+      "trigger": {
+        "type": "heat",
+        "min_temperature": 80
+      },
+      "result": {
+        "type": "toxic_smoke",
+        "damage_per_sec": 3,
+        "radius": 30,
+        "duration": 5,
+        "damage_type": "毒"
+      },
+      "note": "v1 用硫磺替代瓦斯气体",
+      "p0_ref": "P0 反应表 #7"
+    },
+    {
+      "id": "r-bamboo-burn",
+      "name": "木生火",
+      "inputs": [
+        "bamboo"
+      ],
+      "trigger": {
+        "type": "heat",
+        "min_temperature": 200
+      },
+      "result": {
+        "type": "burn",
+        "spread": true,
+        "produces": "coal",
+        "duration": 3
+      },
+      "note": "v2 再补阴火+水",
+      "p0_ref": "P0 反应表 #8"
+    }
+  ],
+  "v1_deviations": [
+    "尸气 → 用阴气替代（v2 拆出尸气）",
+    "瓦斯 → 用硫磺毒烟替代（v2 加瓦斯气体）",
+    "阴火+水 → v2 加阴火",
+    "朱砂+墨+纸 → 用 cinnabar + paper tag 表达（墨/纸 v2 加）",
+    "蒸汽/香灰/纸钱等产出物先用 tag/效果表达，v2 补材质"
+  ]
+}

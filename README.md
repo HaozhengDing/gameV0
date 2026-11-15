@@ -9,7 +9,8 @@
 
 ## 文档
 
-- [docs/00-brief.md](docs/00-brief.md) — 项目 brief / 设计提示词
+- [docs/00-brief.md](docs/00-brief.md)
+- [data/README.md](data/README.md) — 数据层规范（materials / magic numbers / biomes / rooms） — 项目 brief / 设计提示词
 - 后续：core-loop、mechanics、fate-cards、narrative、tech
 
 ## 设计原则（红线）
