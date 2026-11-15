@@ -10,7 +10,8 @@
 ## 文档
 
 - [docs/00-brief.md](docs/00-brief.md)
-- [data/README.md](data/README.md) — 数据层规范（materials / magic numbers / biomes / rooms） — 项目 brief / 设计提示词
+- [data/README.md](data/README.md)
+- [docs/tech/noita-data-structure.md](docs/tech/noita-data-structure.md) — Noita 数据结构只读分析 + 借鉴清单 — 数据层规范（materials / magic numbers / biomes / rooms） — 项目 brief / 设计提示词
 - 后续：core-loop、mechanics、fate-cards、narrative、tech
 
 ## 设计原则（红线）

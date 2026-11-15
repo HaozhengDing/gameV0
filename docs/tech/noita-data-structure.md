@@ -91,3 +91,33 @@ mods/                  # 以后：同路径覆盖
 
 ## 7. 临时文件清理
 桌面临时目录 `D:/noita_unpack_tmp`（复制体 + 解包文本）已删除；手机端未保存任何解包文件。
+
+## 8. 借鉴清单（v0.1 已落地）
+
+> 原则：借「结构」，不借「实现、数值、资产」。每条都对应到我们仓库里的具体文件/字段。
+
+| # | Noita 的做法 | 我们的借鉴方式 | 落地位置 |
+|---|---|---|---|
+| 1 | 实体 XML 用 `<Base file=...>` 做原型继承，只覆盖差异组件 | 配置用 `extends` 浅合并，子项覆盖同名字段 | `data/materials.json`（black_dog_blood extends water）；后续实体数据同用 |
+| 2 | 数据（XML）与行为（Lua）分离 | `data/` 只放配置，行为脚本放 `scripts/`（未建） | `data/README.md` 通用约定 |
+| 3 | 法杖/刷怪用概率分布表（prob / min / max / mean / sharpness） | 刷怪表沿用同结构 | `data/biomes/level-01-coalmine.json > spawn_table.mobs[]` |
+| 4 | 群系 = 拓扑 XML + 生成脚本 + 手工房间块（biome_impl） | `topology` + `rooms[]` 引用拼接 | `data/biomes/level-01-coalmine.json` + `data/rooms/*.json` |
+| 5 | 全局参数集中在一个文件（magic_numbers.xml） | `magic_numbers.json` 集中放设计开关与数值 | `data/magic_numbers.json` |
+| 6 | Mod 用同路径覆盖 `data/...` | 预留 `mods/<mod>/data/...` 约定（v2 再做） | `data/README.md` 第 8 节 |
+| 7 | 实体 = 组件组合（Sprite/Projectile/DamageModel/LuaComponent…） | 实体数据也用「组件字段」描述，Godot 侧用 Node/Resource 实现 | 待建 `data/entities/` |
+| 8 | 房间以数据块形式嵌进程序化地图 | 房间用 `grid + legend + entities` 的纯数据格式 | `data/rooms/room-01-silver-pit.json`、`room-02-gas-pocket.json` |
+
+## 9. 明确不借鉴的部分（原因）
+
+- **C++ 逐像素模拟核心**：引擎级工程，和 Godot 技术栈不匹配；先网格化 CA，验证玩法后再升级。
+- **XML + Lua 双语言**：Godot 已有 GDScript/C#，再引入两套语言只增加维护成本；用 JSON + GDScript。
+- **Noita 的具体数值 / 资产 / 专名**：与《刍狗》的玩法节奏和引擎不同，且有版权问题；数值从我们自己的原型调。
+- **过早设计 Mod API**：等玩家生态出现后再做。
+
+## 10. 相关文件
+
+- `data/README.md` —— 数据层规范
+- `data/materials.json` —— 12 物质 / 8 反应
+- `data/magic_numbers.json` —— 全局调参
+- `data/biomes/level-01-coalmine.json` —— 矿井群系
+- `data/rooms/room-01-silver-pit.json`、`room-02-gas-pocket.json` —— 手工房间
