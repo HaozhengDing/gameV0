@@ -42,13 +42,14 @@ MVP（M1）= 矿井 1 层 + 洞天 + 符箓三段式 + 七星灯 + 神智与可�
 
 1. [docs/01-decision-twist.md](docs/01-decision-twist.md) — 当前路线；与其他文档冲突时，以它为准
 2. [docs/02-m0-plan.md](docs/02-m0-plan.md) — 当前阶段任务（M0，至 2027-01-10）
-3. [docs/log/](docs/log/README.md) — 建议与更新记录
-4. [docs/design/](docs/design/README.md) — 《刍狗》概念设计 v0.1 原文 + 逐段批注（设计底座）
-5. [refs/cards/p0/](refs/cards/p0/README.md) — P0 卡片：系统 / 角色 / 符箓 / 命格 / 区域 / 事件（纸面原型）
-6. [data/README.md](data/README.md) — 数据层规范（materials / magic numbers / biomes / rooms）
-7. [docs/tech/noita-data-structure.md](docs/tech/noita-data-structure.md) — Noita 数据结构只读分析 + 借鉴清单
-8. [refs/README.md](refs/README.md) — 素材库规范（角色卡 / 作品特征卡）
-9. [docs/00-brief.md](docs/00-brief.md) — 早期 brief：规矩怪谈路线的回退存档；§9 协作规则仍然有效
+3. [docs/03-roadmap.md](docs/03-roadmap.md) — 路线图：五个阶段、借鉴的流程、依赖规则
+4. [docs/log/](docs/log/README.md) — 建议与更新记录
+5. [docs/design/](docs/design/README.md) — 《刍狗》概念设计 v0.1 原文 + 逐段批注（设计底座）
+6. [refs/cards/p0/](refs/cards/p0/README.md) — P0 卡片：系统 / 角色 / 符箓 / 命格 / 区域 / 事件（纸面原型）
+7. [data/README.md](data/README.md) — 数据层规范（materials / magic numbers / biomes / rooms）
+8. [docs/tech/noita-data-structure.md](docs/tech/noita-data-structure.md) — Noita 数据结构只读分析 + 借鉴清单
+9. [refs/README.md](refs/README.md) — 素材库规范（角色卡 / 作品特征卡）
+10. [docs/00-brief.md](docs/00-brief.md) — 早期 brief：规矩怪谈路线的回退存档；§9 协作规则仍然有效
 
 后续文档：符箓 VM 形式规格（T1）、实验 A / C 报告、竞品检索（T6）、叙事。
 
