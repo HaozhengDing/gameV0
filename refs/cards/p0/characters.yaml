@@ -167,7 +167,7 @@
     one_liner: 让玩家怀疑 NPC：信息可能是假的，长相也可能是假的
     adapt_score: 4
   numbers:
-    hp: 150–300
+    hp: 150–300（第 2 层原生值；借位到第 1 层时 80–120，见 data/biomes/level-01-coalmine.json v1_deviations）
     damage: 6–15
     disguise_clues: 3（口头禅/影子/温度）
   voice_lines:
@@ -209,7 +209,7 @@
     bottom_line: 无
   power:
     abilities: 热浪（蒸发液体）、龟裂（改变地形）、召唤土蝼、近身重击
-    cost: 怕水（相克 ×1.5）
+    cost: 怕水（weak_to 水）
     trigger: 进入矿底 / 玩家使用明火
     combat: 强
   game_function:
@@ -229,8 +229,8 @@
     hp: 420
     damage: 10–18
     arena: 矿底，四周有水银池
-    weak: 水/阴（相克 ×1.5）
-    resist: 火（×0.6）
+    weak_to: "水 / 阴气（具体物质；五行不进伤害公式，见 S-0003）"
+    resist: 火（灼烧伤害类型，抗性 0.4，等效原 ×0.6）
     drop: {silver: 150, cinnabar: 3, talisman: 毕方火}
   voice_lines:
     - 「……水……」

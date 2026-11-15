@@ -33,7 +33,10 @@ data/
 
 物质字段：`id / name / ui_key / state / element / polarity / density / temperature / flammable / ignition_temperature / tags / color / extends / notes`。
 
-反应字段：`id / name / inputs / target_tags / trigger / result / p0_ref / note`。
+反应字段：`id / name / inputs / target_tags / trigger / priority / consumes / result / p0_ref / note`。
+
+- `priority`（整数，默认 `0`）：同一格、同一 tick 内，若有多条反应的条件同时满足，按 `priority` **降序**排序，**只执行第一条**；其余本 tick 不执行。
+- `consumes`（字符串数组，可选）：本反应实际消耗的物质 id；**缺省时等于 `inputs`**。未列入 `consumes` 的输入只作为条件参与匹配，反应后保留。
 
 - `trigger.type`：`contact` / `heat`（带 `min_temperature`）
 - `result.type`：`explosion` / `heat_cloud` / `purify` / `damage` / `barrier` / `temporary_talisman_slot` / `toxic_smoke` / `burn`
@@ -43,18 +46,26 @@ v0：12 种物质、8 条反应；与 P0 系统卡 S-0003 对齐。偏离项写�
 
 ## 5. magic_numbers.json
 
-分组：`design / player / sanity / elements / economy / enemy_curve / layers / layer_01`。
+分组：`design / player / sanity / elements / economy / enemy_curve / layers / layer_01`；偏离项写在 `v1_deviations`。
+
+- `elements.in_damage_formula: false`：五行不进伤害公式（S-0003）。
+- `economy`：每层银两 = `silver_base + silver_per_level × (L-1)`；法器价 = `wand_price_base + wand_price_per_level × (L-1)`（均为线性）；符价 = `talisman_price_t1 × talisman_tier_multiplier^(t-1)`，按品阶 t（1–5）而非层数。
+- `economy.yin_money_per_silver` / `yin_money_per_silver_zishi`：烧 1 两银得多少冥钱（平时 / 子时）；`yin_money_to_silver: false` 表示不能反向兑换。
+- `sanity.possession`：可逆入魔的参数（进出阈值、心魔、失控、魔痕），见 S-0004。
+- `sanity.forbidden_backlash: next_cast_phantom`：念禁符后，下一次施法整次变为幻符；`phantom_never_with_forbidden: true`：禁符与幻符永不同在一次施法（S-0004）。
 用途：全局调参、设计开关；后续可热重载。**所有可调数值先集中在这里**，别散落到代码。
 
 ## 6. biomes/*.json
 
-字段：`id / name / layer / status / topology / theme / spawn_table / rooms / hazards / rules / economy / exits / design_notes`。
+字段：`id / name / layer / status / topology / theme / spawn_table / rooms / hazards / rules / economy / exits / design_notes / v1_deviations`。
 
 - `topology`：`wang_tile` + 模板图 + `rooms_mode: spliced`（程序化拓扑 + 手工房间拼接）。
 - `spawn_table`：`rolls_per_room`、`mobs`、`elites`、`boss`；`prob` 是相对权重，`min/max/mean/sharpness` 是分布参数（参考 Noita 的概率表格式）。
 - `rooms`：`ref / weight / count / stage / aabb`，引用 `data/rooms/` 下的房间。
 - `rules`：`id / text / effect / discovery / type`；`type: false` 显式标记**假规矩**（村民骗你）。
-- `hazards`：`id / trigger / effect / damage / radius`。
+- `hazards`：`id / trigger / materials / reaction / effect / damage / radius`；有 `reaction` 时伤害/半径取自 `materials.json` 对应反应，不在 hazard 里重复写。
+- `boss.weak_to`：具体物质 id 列表（不写五行）；`resist` 指伤害类型。
+- `v1_deviations`：本层偏离设计原文 / P0 卡的记录（写清理由与复议条件）。
 
 `level-01-coalmine.json` = P0 区域卡 L-0001 的数据化：4–6 小怪、0–1 精英、旱魃 BOSS、约 300 银、15 分钟。
 

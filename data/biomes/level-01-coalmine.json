@@ -133,8 +133,8 @@
         "stage": "mid",
         "stats": {
           "hp": [
-            150,
-            300
+            80,
+            120
           ],
           "damage": [
             6,
@@ -150,7 +150,7 @@
             ]
           }
         },
-        "note": "P0 卡片允许从第 2 层借位测试"
+        "note": "P0 卡片允许从第 2 层借位测试；第 1 层 hp 下调为 80–120（见 v1_deviations），第 2 层恢复 150–300"
       }
     ],
     "boss": {
@@ -162,9 +162,9 @@
         10,
         18
       ],
-      "weakness": [
-        "水",
-        "阴"
+      "weak_to": [
+        "water",
+        "yin_qi"
       ],
       "resist": [
         "火"
@@ -222,9 +222,8 @@
         "coal",
         "saltpeter"
       ],
-      "damage": 60,
-      "radius": 80,
-      "note": "明火进入瓦斯囊"
+      "reaction": "r-black-powder",
+      "note": "明火进入硝+硫+煤混合区；伤害/半径取 r-black-powder（单一数据源）。原 60 伤 / 半径 80 属于瓦斯矿井爆炸，v2 加瓦斯气体后再启用"
     },
     {
       "id": "collapse",
@@ -282,5 +281,11 @@
     "P0 L-0001 的数据化：刷怪概率表 + 2 个手工房间 + BOSS 房",
     "房间只做骨架，实体/材质以 JSON 引用，不接引擎",
     "瓦斯/水银/塌方是层的三大 hazard，教学靠碑文与试错"
+  ],
+  "v1_deviations": [
+    "画皮（elite-painted-skin）hp 150–300 → 80–120：原 150–300 是从第二层借位；第一层玩家仅 4 符位，10 倍血量差会污染「15 分钟跑通」指标；第二层恢复原值。",
+    "经济曲线：删除指数公式 300 × 1.5^(L-1)，改为线性 silver_base 300 + silver_per_level 180 × (L-1)，数值源在 data/magic_numbers.json economy（全局调参集中，不在单层 biome 重复）；本层 economy.silver [250, 350] 不变。原指数公式 7 层约 3400 银，会迫使商店价格同步指数化；复议条件 = 第 4 层做出来之后。",
+    "旱魃 weakness: [水, 阴]（五行/阴阳标签）→ weak_to: [water, yin_qi]（具体物质，见 S-0003）；resist: [火] 保留，指伤害类型 火(灼)，非五行系数。",
+    "hazard gas_explosion 原自带 60 伤 / 半径 80，与 r-black-powder（25 / 40）对同一组物质双重定义；改为引用 r-black-powder。60/80 的瓦斯矿井爆炸待 v2 瓦斯气体。"
   ]
 }

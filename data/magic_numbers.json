@@ -10,7 +10,8 @@
     "yin_world_from_layer": 3,
     "fate_choose_three": true,
     "fate_reroll_allowed": false,
-    "hidden_fate_cost": true
+    "hidden_fate_cost": true,
+    "fate_in_mvp": false
   },
   "player": {
     "hp": 100,
@@ -36,25 +37,46 @@
     },
     "witness_drain_per_sec": 2,
     "forbidden_book_cost": 20,
-    "forbidden_threshold": 33,
+    "forbidden_cast_cost": 20,
+    "forbidden_backlash": "next_cast_phantom",
+    "phantom_never_with_forbidden": true,
+    "phantom_cast_chance": 0.15,
+    "phantom_slots": 1,
     "yin_damage_lanterns": [
       0.2,
       0.5
-    ]
+    ],
+    "possession": {
+      "enter_at": 0,
+      "exit_at": 20,
+      "reversible": true,
+      "phantoms_become_real": true,
+      "phantom_kill_sanity": 10,
+      "phantom_drop": "yan_jin",
+      "yin_enemies_neutral": true,
+      "lose_control_interval_sec": 30,
+      "lose_control_duration_sec": 1,
+      "lose_control_warning_sec": 2,
+      "forbidden_cost_lanterns": 0.5,
+      "scar_max_sanity_per_entry": 10,
+      "scar_max_sanity_cap": 30
+    }
   },
   "elements": {
-    "counter_multiplier": 1.5,
-    "countered_multiplier": 0.6,
-    "same_multiplier": 1
+    "in_damage_formula": false
   },
   "economy": {
-    "silver_per_layer_base": 300,
-    "layer_multiplier": 1.5,
+    "silver_base": 300,
+    "silver_per_level": 180,
     "talisman_price_t1": 80,
     "talisman_tier_multiplier": 2,
     "wand_price_base": 250,
+    "wand_price_per_level": 150,
     "papercraft_cost_ratio": 0.5,
-    "paper_cost": 20
+    "paper_cost": 20,
+    "yin_money_per_silver": 10,
+    "yin_money_per_silver_zishi": 20,
+    "yin_money_to_silver": false
   },
   "enemy_curve": {
     "hp_multiplier_per_layer": 1.8,
@@ -179,5 +201,14 @@
       250,
       350
     ]
-  }
+  },
+  "v1_deviations": [
+    "elements：删除五行伤害乘数 counter 1.5 / countered 0.6 / same 1.0，改为 in_damage_formula: false（见 S-0003）；复议条件 = 原型跑通后玩家反馈五行感不足。",
+    "sanity：删除 forbidden_threshold 33（禁符不再要求低神智）；新增 forbidden_cast_cost 20、forbidden_backlash: next_cast_phantom（念禁符后下一次施法整次变为幻符）、phantom_never_with_forbidden（禁符与幻符永不同在一次施法）、phantom_cast_chance 0.15、phantom_slots 1（见 S-0004）。",
+    "economy：silver_per_layer_base 300 × layer_multiplier 1.5^(L-1) 改为线性 silver_base 300 + silver_per_level 180 × (L-1)；原指数公式 7 层约 3400 银，会迫使商店价格同步指数化；复议条件 = 第 4 层做出来之后。",
+    "economy：法器价由设计原文 250 × 1.6^(L-1) 改为线性 wand_price_base 250 + wand_price_per_level 150 × (L-1)；150/250 = 180/300，法器价恒为当层收入的 5/6，与线性收入同步。原指数价 L7 约 4194，是当层收入的 3 倍。符价 80 × 2^(t-1) 按品阶（最多 5 阶）而非层数，不随层指数膨胀，暂不改。复议条件同收入：第 4 层做出来之后。",
+    "design：新增 fate_in_mvp: false——命格三选一推到 EA 后（见 docs/01-decision-twist.md）；fate_choose_three 保留为命格系统本身的规则。",
+    "sanity.possession：入魔由设计原文的「另一条路线」改为可逆状态（参考饥荒理智系统）：神智 0 入魔、≥20 出魔；入魔时幻觉敌人变实，击杀 +10 神智并掉魇烬；阴性敌人中立；每 30 秒失控 1 秒；禁符改付 0.5 盏魄灯；每次入魔本局神智上限 −10（最多 −30）。见 S-0004。",
+    "economy：烧银换冥钱平时 1:10、子时 1:20（设计原文 3.6 写作「子时 1:5」，方向写反——子时鬼门开，阴间交易应更划算；批注 C34）。只能银换冥钱，不能反向兑换，防止昼夜套利（批注 C16）。双货币属 M2 内容，数值先占位。"
+  ]
 }

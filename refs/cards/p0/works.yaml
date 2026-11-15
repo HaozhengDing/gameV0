@@ -33,4 +33,4 @@
   stealable: [规则即引导, 文本即关卡, 无名实体, 假规则]
   cthulhu_score: 4
   verdict: 收
-  design_fit: 《刍狗》每个区域 2–3 条规矩 + UI 说谎，直接借它的「多视角矛盾」结构
+  design_fit: 《刍狗》每个区域 2–3 条规矩，借它的「多视角矛盾」与「假规则」写法；规矩只是叙事规则层，后果由反应表兑现，UI 说谎只限未知信息（docs/01-decision-twist.md D2 / D3）

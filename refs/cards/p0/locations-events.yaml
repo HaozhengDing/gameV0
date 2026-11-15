@@ -7,7 +7,7 @@
   theme_materials: [煤, 硝石, 硫磺, 朱砂, 水银池, 铁, 木支架]
   enemies: [矿鬼, 土蝼, 旱魃（BOSS）]
   hazards:
-    - 瓦斯：明火（毕方火/煞）→ 爆炸 60 伤、半径 80
+    - 火药层：明火（毕方火/煞）进入硝+硫+煤混合区 → 黑火药爆炸 25 伤、半径 40（r-black-powder）；纯硫受热先冒毒烟（r-sulfur-toxic-smoke），是「快炸了」的预兆
     - 水银池：密度大于铁，尸体/掉落物浮起，可装葫芦
     - 塌方：挖掘过快触发落石
   rules:
@@ -16,28 +16,34 @@
   numbers:
     duration: 15 分钟（原型）
     mobs: 4–6
-    elite: 0–1（画皮可从第 2 层借位测试）
+    elite: 0–1（画皮可从第 2 层借位测试，第 1 层 hp 80–120）
     silver: 300
     exit: 洞天（传法/鬼市/丹炉/纸扎铺）
-  layout_notes: 入口→矿道分叉（左：瓦斯近路 / 右：水银池绕路）→矿底 BOSS
+  layout_notes: 入口→矿道分叉（左：火药层近路 / 右：水银池绕路）→矿底 BOSS
   open_questions: [原型层长度, 是否强制 BOSS]
   design_ref: [2.3 地层结构, 3.6 经济流]
+  deviations:
+    - 原「瓦斯爆炸 60 伤 / 半径 80」改为引用 r-black-powder（25 / 40）；瓦斯气体与 60/80 的矿井爆炸待 v2（与 data/biomes/level-01-coalmine.json 一致）。
   status: draft
 
 - type: event
   id: E-0001
   name: 子时莫应声
-  kind: 规矩
-  trigger: 层 1/2 游戏内子时，背后有人叫你的道号
+  kind: 规矩（硬规矩，docs/01-decision-twist.md D2 形态 b）
+  trigger: 层 1/2 的「子时」（原型：进入本层第 10 分钟触发一次，不做完整昼夜系统），背后有人叫你的道号
   rule_text: 村民说过：夜半有人叫，别应声，别回头。
   choices:
-    - 应答: 神智 -25，召来「怨灵」（HP 80）追猎 100 秒
+    - 应答: 身后涌出一团阴气（yin_qi，接触即阴性伤害、熄灯），并引来「怨灵」（HP 80）追猎 100 秒
     - 沉默: 安全，但听到下一句线索（徐九游记残页）
     - 贴符（朱砂+纸）: 现出脚印，开启密道（隐藏出口）
     - 离开: 安全，错过线索
-  outcomes_notes: 沉默不是最优，贴符才有奖励——鼓励玩家用道具验证规矩
-  numbers: {sanity_loss: 25, wraith_hp: 80, reward: 游记残页 ×1}
-  design_ref: [1.4 三魂七魄, 2.5 人物]
+  outcomes_notes: 沉默不是最优，贴符才有奖励——鼓励玩家用道具验证规矩。应答的后果全是世界事件，也都能用沙盒解：糯米当场净化阴气（r-rice-purify），鬼火·镇（F-0003）定住怨灵。
+  lore: 叫你道号的，是上一位下山的方士。M2 接入祠堂后，若祠堂里有牌位，来者带着那一局的法器（同 D-0003 的怨灵规则）；之前一律用固定怨灵。
+  numbers: {yin_qi_cells: 40, wraith_hp: 80, chase_seconds: 100, reward: 游记残页 ×1}
+  design_ref: [1.4 三魂七魄, 2.2 历史（祠堂牌位）, 2.5 人物]
+  deviations:
+    - 删除「应答 → 神智 −25」：规矩的后果改为世界事件（阴气 + 怨灵），神智只从目睹、禁书、阴面、禁符四处流失（D3）。
+    - 「子时」在原型中用层内计时触发一次，不做完整昼夜系统（批注 C24）。
   status: draft
 
 - type: event

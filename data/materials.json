@@ -243,6 +243,12 @@
         "type": "heat",
         "min_temperature": 120
       },
+      "priority": 10,
+      "consumes": [
+        "saltpeter",
+        "sulfur",
+        "coal"
+      ],
       "result": {
         "type": "explosion",
         "damage": 25,
@@ -260,6 +266,11 @@
       "trigger": {
         "type": "contact"
       },
+      "priority": 0,
+      "consumes": [
+        "lime",
+        "water"
+      ],
       "result": {
         "type": "heat_cloud",
         "damage": 5,
@@ -282,6 +293,10 @@
       "trigger": {
         "type": "contact"
       },
+      "priority": 0,
+      "consumes": [
+        "yin_qi"
+      ],
       "result": {
         "type": "purify",
         "removes": "yin_qi"
@@ -301,6 +316,10 @@
       "trigger": {
         "type": "contact"
       },
+      "priority": 0,
+      "consumes": [
+        "black_dog_blood"
+      ],
       "result": {
         "type": "damage",
         "damage": 20,
@@ -320,6 +339,8 @@
       "trigger": {
         "type": "contact"
       },
+      "priority": 0,
+      "consumes": [],
       "result": {
         "type": "barrier",
         "effect": "eldritch_cannot_cross"
@@ -338,6 +359,10 @@
       "trigger": {
         "type": "contact"
       },
+      "priority": 0,
+      "consumes": [
+        "cinnabar"
+      ],
       "result": {
         "type": "temporary_talisman_slot",
         "value": 1,
@@ -356,6 +381,8 @@
         "type": "heat",
         "min_temperature": 80
       },
+      "priority": 1,
+      "consumes": [],
       "result": {
         "type": "toxic_smoke",
         "damage_per_sec": 3,
@@ -363,7 +390,7 @@
         "duration": 5,
         "damage_type": "毒"
       },
-      "note": "v1 用硫磺替代瓦斯气体",
+      "note": "v1 用硫磺替代瓦斯气体；不消耗硫：受热期间持续冒烟（烟云刷新而非叠加），硫留给 r-black-powder 或后续燃烧",
       "p0_ref": "P0 反应表 #7"
     },
     {
@@ -376,6 +403,10 @@
         "type": "heat",
         "min_temperature": 200
       },
+      "priority": 0,
+      "consumes": [
+        "bamboo"
+      ],
       "result": {
         "type": "burn",
         "spread": true,
@@ -391,6 +422,9 @@
     "瓦斯 → 用硫磺毒烟替代（v2 加瓦斯气体）",
     "阴火+水 → v2 加阴火",
     "朱砂+墨+纸 → 用 cinnabar + paper tag 表达（墨/纸 v2 加）",
-    "蒸汽/香灰/纸钱等产出物先用 tag/效果表达，v2 补材质"
+    "蒸汽/香灰/纸钱等产出物先用 tag/效果表达，v2 补材质",
+    "r-black-powder 与 r-sulfur-toxic-smoke 原存在竞争：热源会在 80° 先把硫烧成毒烟，到 120° 时硫已耗尽，黑火药永远点不着。现用 priority + consumes 解决：r-black-powder priority 10、r-sulfur-toxic-smoke priority 1，二者同时满足时只执行黑火药；硫磺毒烟 consumes: []（不消耗硫），升温途经 80–119° 只冒烟、硫保留到 120° 触发黑火药。未采用 heat_max: 119——它让两条反应的温度区间不再重叠，priority 失去作用，且明火（≥120°）接触纯硫将不再产生毒烟。",
+    "r-rice-purify consumes: [yin_qi]：糯米不被消耗，对齐设计原文 4.4 的 (糯米, 尸气) -> (糯米, 空)。",
+    "r-quicksilver-ward consumes: []：水银界只阻挡，不消耗水银池。"
   ]
 }

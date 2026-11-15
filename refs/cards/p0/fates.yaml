@@ -28,7 +28,9 @@
   numbers: {forbidden_threshold_bonus: -10, ui_corrupt_at: 80}
   adapt_score: 4
   why: 把「提前获得力量」与「提前失去信息」捆在一起
-  status: draft
+  deviations:
+    - 明面收益已失效：禁符不再有神智门槛（S-0002 / S-0004），forbidden_threshold_bonus 作废。命格三选一已推到 EA 后（docs/01-decision-twist.md），届时重设计本卡 surface；暗面「提前乱码」也须按 D3（只腐坏未知信息，不乱码已学会的符名与属性）重写。在此之前不进原型。
+  status: needs_rework
 
 - type: fate
   id: D-0003
