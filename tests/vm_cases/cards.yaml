@@ -1,0 +1,119 @@
+# T1 符箓 VM 测试替身卡表（v0.1｜草案，待用户审定）
+# 用途：只服务 tests/vm_cases/ 的 30 条用例；不是正式符卡数据（正式卡在 refs/cards/p0/talismans.yaml）。
+# 数值来源：docs/design/刍狗_概念设计v0.1_原文.md §3.3（符头 +3/+5、符脚 +8~+30）
+#          + refs/cards/p0/talismans.yaml F-0001~F-0004 的 spirit_cost 反推（见 spec §5.2）。
+# 约束：action 里引用的物质 id 必须存在于 data/materials.json（当前 12 种）。
+schema: gamev0.vm_card_catalog/v0.1
+version: 0.1
+updated: "2026-11-15"
+deviations:
+  - "符组成本按「各段 spirit_cost 相加 = 卡面 spirit_cost」反推：F-0001 13 = 飞剑5 + 煞8；F-0002 40 = 毕方火10 + 化·水30；F-0003 20 = 鬼火8 + 镇12。"
+  - "F-0004 土遁·归 10/refund 8/net 2 只能读作「土遁10 + 归0，归返还8」；故归 的 spirit_cost 记为 0，与 S-0002『符脚 +8~+30』不一致，列为待拍板（spec §7.3）。"
+  - "化·金（设计 §3.3 符脚 +30）需要 data 里不存在的「金/金属」物质，故本卡表不提供化·金；30 条用例不覆盖它（数据缺口，spec §7.4）。"
+
+segments:
+  head:
+    - id: head-urgent-order
+      name: 急急如律令
+      spirit_cost: 3
+      effect: {cast_interval_delta_ticks: -6}
+      note: 施法间隔 -0.1s（60Hz = 6 tick）；VM 只记录，不改动作。
+    - id: head-tiangang
+      name: 天罡
+      spirit_cost: 3
+      effect: {damage_mult: 1.2}
+      note: 本句所有伤害类动作的伤害 ×1.2（见 spec §3.2 normalize 规则）。
+    - id: head-chu-touch
+      name: 敕·触
+      spirit_cost: 5
+      effect: {trigger: on_hit}
+      note: 命中时执行预读的下一句（静态展开，见 spec §2.3）。
+    - id: head-feng-shi
+      name: 奉·时
+      spirit_cost: 5
+      effect: {trigger: on_expire}
+      note: 投射物 ttl 到期时执行预读的下一句。
+    - id: head-fenshen
+      name: 分身
+      spirit_cost: 5
+      effect: {projectile_mult: 2}
+      note: 本句投射物数量 ×2，可叠加（2 张 → ×4）。
+  body:
+    - id: body-flying-sword
+      name: 飞剑
+      spirit_cost: 5
+      element: 金
+      damage: 8
+      damage_type: 金
+      pierce: 1
+    - id: body-bifang-huo
+      name: 毕方火
+      spirit_cost: 10
+      element: 火
+      damage: 10
+      damage_type: 火
+      payloads:
+        - {op: ignite, duration: 3, spread: true, damage_per_sec: 3}
+    - id: body-gui-huo
+      name: 鬼火
+      spirit_cost: 8
+      element: 阴
+      damage: 0
+      damage_type: 阴
+      payloads:
+        - {op: extinguish_lantern, lanterns: 0.3}
+    - id: body-tudun
+      name: 土遁
+      spirit_cost: 10
+      element: 土
+      damage: 0
+      payloads:
+        - {op: dig, radius: 2}
+    - id: body-tengsheng
+      name: 藤生
+      spirit_cost: 12
+      element: 木
+      damage: 0
+      payloads:
+        - {op: spawn_material, material: bamboo, shape: pool, count: 3, radius: 2}
+    - id: body-forbidden-wulei
+      name: 禁符·五雷
+      spirit_cost: 40
+      element: 雷
+      damage: 60
+      damage_type: 雷
+      forbidden: true
+      note: 禁符（S-0004）：念出 −20 神智并置「下一次施法反噬」。本次照常生效。
+  foot:
+    - id: foot-sha
+      name: 煞
+      spirit_cost: 8
+      action: {op: explode, radius: 20, damage: 15, damage_type: 火}
+    - id: foot-zhen
+      name: 镇
+      spirit_cost: 12
+      action: {op: apply_status, status: stun, duration: 1.5}
+    - id: foot-shi
+      name: 噬
+      spirit_cost: 12
+      action: {op: drain_life, amount: 4}
+    - id: foot-hua-water
+      name: 化·水
+      spirit_cost: 30
+      action: {op: convert_material, source: {tags: [liquid, solid, powder]}, to: water, radius: 2}
+    - id: foot-hui
+      name: 归
+      spirit_cost: 0
+      timing: sentence_end
+      action: {op: refund_spirit, amount: 8}
+      note: 句末立即结算（executor=vm），不是命中载荷；与 S-0002『符脚 +8~+30』冲突，见 spec §7.3。
+
+# 幻符（<33 的 15% 替换 / 禁符反噬时使用）。M0 没有「同层敌人符池」数据（数据缺口），
+# 用例用 rng.phantom_card 显式注入；phantom_cast 动作内联其 effect，T4 可直接执行。
+phantom_pool:
+  - id: phantom-001
+    name: 幻符·阴噬（占位）
+    effect: {op: damage, amount: 6, damage_type: 阴}
+  - id: phantom-002
+    name: 幻符·阴气涌（占位）
+    effect: {op: spawn_material, material: yin_qi, shape: cloud, count: 1, radius: 3, duration: 2}

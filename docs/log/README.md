@@ -7,6 +7,8 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-15 | [2026-11-15-09-t1-vm-spec.md](2026-11-15-09-t1-vm-spec.md) | 建议 + 更新 | 详细 | T1 符箓 VM 形式规格草案 + 30 条用例（待用户审定，6 条待拍板） |
+| 2026-11-15 | [2026-11-15-08-t2-sim-core.md](2026-11-15-08-t2-sim-core.md) | 更新 | 详细 | T2 sim_core 原型 + 开发机基准（worst p95 2.25ms / typical 0.15ms，非 go-no-go 依据） |
 | 2026-11-15 | [2026-11-15-08-scale-narrative-leap-wand.md](2026-11-15-08-scale-narrative-leap-wand.md) | 建议 | 详细 | 方向确认：规模长线做、叙事借 Noita、跃迁魔杖参考；彩蛋暂缓 |
 | 2026-11-15 | [2026-11-15-07-integrate-roadmap-bundle.md](2026-11-15-07-integrate-roadmap-bundle.md) | 更新 | 详细 | 整合 7b0ea7e 路线图 03 到当前 main，保留 T0/T6/CI |
 | 2026-11-15 | [2026-11-15-06-ci-workflow.md](2026-11-15-06-ci-workflow.md) | 更新 | 详细 | T0 收尾：接入 GitHub Actions 数据校验 workflow |

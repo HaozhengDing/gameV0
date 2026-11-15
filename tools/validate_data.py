@@ -9,6 +9,7 @@
 退出码：0 全过；1 有错误；2 缺依赖。
 """
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -338,12 +339,35 @@ def validate_cards():
     print(f"cards: {n} 张")
 
 
+def validate_vm_cases():
+    """C-VM 用例守护（T1）：调用 tests/vm_cases/validate_cases.py 做结构 / 算术 / 不变量自检。
+
+    用例是 T1 的契约产物，T3 按它实现参考 VM；把它纳入 T0 校验，CI 就能在用例被改坏时变红
+    （无需 workflow 权限）。用例不存在时只记 warning，不阻塞不涉及 VM 的破坏性测试。
+    """
+    script = ROOT / "tests" / "vm_cases" / "validate_cases.py"
+    if not script.exists():
+        warnings.append("tests/vm_cases/validate_cases.py 不存在，跳过 C-VM 用例校验")
+        return
+    proc = subprocess.run(
+        [sys.executable, str(script), str(ROOT)],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    if proc.returncode != 0:
+        tail = (proc.stdout + proc.stderr).strip().splitlines()[-8:]
+        err("tests/vm_cases: 用例自检失败（退出码 %d）: %s" % (proc.returncode, " | ".join(tail)))
+    else:
+        last = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+        print("vm_cases: " + (last or "自检通过"))
+
+
 def main():
     material_ids, reaction_ids, material_by_id = validate_materials()
     validate_magic_numbers()
     room_map = load_rooms(material_ids, material_by_id)
     validate_biomes(room_map, material_by_id, material_ids, reaction_ids)
     validate_cards()
+    validate_vm_cases()
 
     print(f"materials: {len(material_ids)} | reactions: {len(reaction_ids)} | rooms: {len(room_map)}")
     for w in warnings:

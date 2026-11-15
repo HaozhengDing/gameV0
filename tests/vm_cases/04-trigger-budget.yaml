@@ -1,0 +1,406 @@
+# T1 符箓 VM 用例 04：触发递归与预算上限（VM-024 ~ VM-030）
+# 上限建议值：深度 3 / 动作执行次数 64 / 投射物 32（spec §2.4、§7.2）。
+schema: gamev0.vm_cases/v0.1
+version: 0.1
+updated: "2026-11-15"
+spec: docs/tech/talisman-vm-spec.md
+cases:
+  - id: VM-024
+    title: 敕·触基本递归：命中触发子句静态展开，共享游标
+    category: [trigger]
+    spec: "§2.3"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-chu-touch, body-flying-sword, body-flying-sword, foot-sha]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          trigger:
+            kind: on_hit
+            depth: 1
+            actions:
+              - op: spawn_projectile
+                spell: body-flying-sword
+                damage: 8
+                damage_type: 金
+                element: 金
+                pierce: 1
+                payloads:
+                  - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [head-chu-touch, body-flying-sword, body-flying-sword, foot-sha]
+      spirit_after: 27
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count == 3
+        - spawn_count == 2
+        - max_depth == 1
+        - spirit_after == 27
+
+  - id: VM-025
+    title: 奉·时：ttl 到期触发的子句同样静态展开
+    category: [trigger]
+    spec: "§2.3"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-feng-shi, body-flying-sword, body-bifang-huo, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          trigger:
+            kind: on_expire
+            depth: 1
+            actions:
+              - op: spawn_projectile
+                spell: body-bifang-huo
+                damage: 10
+                damage_type: 火
+                element: 火
+                payloads:
+                  - {op: ignite, duration: 3, spread: true, damage_per_sec: 3}
+      consumed: [head-feng-shi, body-flying-sword, body-bifang-huo]
+      spirit_after: 30
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count == 3
+        - spawn_count == 2
+        - max_depth == 1
+        - spirit_after == 30
+
+  - id: VM-026
+    title: 触发子句无符：牌堆已尽，trigger=null 并记 empty_trigger
+    category: [trigger]
+    spec: "§2.3"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-chu-touch, body-flying-sword]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+      consumed: [head-chu-touch, body-flying-sword]
+      spirit_after: 40
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [empty_trigger, round_end]
+      invariants:
+        - action_count == 1
+        - spawn_count == 1
+        - max_depth == 0
+        - spirit_after == 40
+
+  - id: VM-027
+    title: 深度上限 3：第 4 层触发不展开、不读牌、不扣费
+    category: [trigger, limits]
+    spec: "§2.3 §2.4"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 8
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-chu-touch, body-flying-sword, head-chu-touch, body-flying-sword, head-chu-touch, body-flying-sword, head-chu-touch, body-flying-sword]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          trigger:
+            kind: on_hit
+            depth: 1
+            actions:
+              - op: spawn_projectile
+                spell: body-flying-sword
+                damage: 8
+                damage_type: 金
+                element: 金
+                pierce: 1
+                trigger:
+                  kind: on_hit
+                  depth: 2
+                  actions:
+                    - op: spawn_projectile
+                      spell: body-flying-sword
+                      damage: 8
+                      damage_type: 金
+                      element: 金
+                      pierce: 1
+                      trigger:
+                        kind: on_hit
+                        depth: 3
+                        actions:
+                          - op: spawn_projectile
+                            spell: body-flying-sword
+                            damage: 8
+                            damage_type: 金
+                            element: 金
+                            pierce: 1
+      consumed: [head-chu-touch, body-flying-sword, head-chu-touch, body-flying-sword, head-chu-touch, body-flying-sword, head-chu-touch, body-flying-sword]
+      spirit_after: 10
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [depth_limit, round_end]
+      invariants:
+        - action_count == 4
+        - spawn_count == 4
+        - max_depth == 3
+        - spirit_after == 10
+
+  - id: VM-028
+    title: 动作上限 64：恰好 64 次执行，不截断
+    category: [trigger, limits]
+    spec: "§2.4"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 100
+        spirit_max: 120
+        regen_per_sec: 10
+        slots: 8
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-fenshen, head-fenshen, head-fenshen, head-fenshen, body-flying-sword, foot-sha, foot-zhen, foot-shi]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          count: 16
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+            - {op: apply_status, status: stun, duration: 1.5}
+            - {op: drain_life, amount: 4}
+      consumed: [head-fenshen, head-fenshen, head-fenshen, head-fenshen, body-flying-sword, foot-sha, foot-zhen, foot-shi]
+      spirit_after: 43
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count == 64
+        - spawn_count == 16
+        - max_depth == 0
+        - spirit_after == 43
+
+  - id: VM-029
+    title: 动作上限超限：5 张分身请求 32 发，count 被钳到 16
+    category: [trigger, limits]
+    spec: "§2.4"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 100
+        spirit_max: 120
+        regen_per_sec: 10
+        slots: 9
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-fenshen, head-fenshen, head-fenshen, head-fenshen, head-fenshen, body-flying-sword, foot-sha, foot-zhen, foot-shi]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          count: 16
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+            - {op: apply_status, status: stun, duration: 1.5}
+            - {op: drain_life, amount: 4}
+      consumed: [head-fenshen, head-fenshen, head-fenshen, head-fenshen, head-fenshen, body-flying-sword, foot-sha, foot-zhen, foot-shi]
+      spirit_after: 38
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [budget_exhausted_action, round_end]
+      invariants:
+        - action_count == 64
+        - spawn_count == 16
+        - max_depth == 0
+        - spirit_after == 38
+
+  - id: VM-030
+    title: 投射物上限 32：6 张分身请求 64 发，count 被钳到 32
+    category: [trigger, limits]
+    spec: "§2.4"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 100
+        spirit_max: 120
+        regen_per_sec: 10
+        slots: 7
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-fenshen, head-fenshen, head-fenshen, head-fenshen, head-fenshen, head-fenshen, body-flying-sword]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          count: 32
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+      consumed: [head-fenshen, head-fenshen, head-fenshen, head-fenshen, head-fenshen, head-fenshen, body-flying-sword]
+      spirit_after: 65
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [budget_exhausted_projectile, round_end]
+      invariants:
+        - action_count == 32
+        - spawn_count == 32
+        - max_depth == 0
+        - spirit_after == 65

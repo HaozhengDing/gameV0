@@ -1,0 +1,423 @@
+# T1 符箓 VM 用例 01：基础句法（VM-001 ~ VM-008）
+# schema 见 docs/tech/talisman-vm-spec.md §6.2；卡表见 cards.yaml；期望动作可省略默认值（§3.2）。
+schema: gamev0.vm_cases/v0.1
+version: 0.1
+updated: "2026-11-15"
+spec: docs/tech/talisman-vm-spec.md
+cases:
+  - id: VM-001
+    title: 单符胆最小施法：飞剑一发，牌堆读尽触发回符
+    category: [basic, cursor]
+    spec: "§2.2"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+      consumed: [body-flying-sword]
+      spirit_after: 45
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - max_depth <= 3
+        - spirit_after >= 0
+        - spawn_count == 1
+
+  - id: VM-002
+    title: 符头+符胆：急急如律令进句成本，但不改变动作
+    category: [basic, head]
+    spec: "§2.2 §3.2"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-urgent-order, body-flying-sword]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+      consumed: [head-urgent-order, body-flying-sword]
+      spirit_after: 42
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - max_depth <= 3
+        - spirit_after == 42
+
+  - id: VM-003
+    title: 连续符脚归属：两张煞都挂到同一个飞剑上
+    category: [foot_attach]
+    spec: "§1.3"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 3
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, foot-sha, foot-sha]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [body-flying-sword, foot-sha, foot-sha]
+      spirit_after: 29
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - action_count == 3
+        - spirit_after == 29
+
+  - id: VM-004
+    title: 符脚遇符头停止：符脚只吃连续的，游标停在下一句首且不回符
+    category: [foot_attach, cursor]
+    spec: "§1.2 §1.3"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, foot-sha, head-urgent-order, body-flying-sword]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [body-flying-sword, foot-sha]
+      spirit_after: 37
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 2
+      round_ended: false
+      ready_at_tick_after: 0
+      event_codes: []
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - cursor_after == 2
+        - round_ended == false
+
+  - id: VM-005
+    title: 多符胆：符头状态不跨句，天罡只放大第一句
+    category: [multi_body]
+    spec: "§1.3 §3.2"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 2
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-tiangang, body-flying-sword, foot-sha, body-bifang-huo]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 9.6
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 18, damage_type: 火}
+        - op: spawn_projectile
+          spell: body-bifang-huo
+          damage: 10
+          damage_type: 火
+          element: 火
+          payloads:
+            - {op: ignite, duration: 3, spread: true, damage_per_sec: 3}
+      consumed: [head-tiangang, body-flying-sword, foot-sha, body-bifang-huo]
+      spirit_after: 24
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spawn_count == 2
+        - spirit_after == 24
+
+  - id: VM-006
+    title: 多符头累积：天罡+分身同句生效，下一句重新累积
+    category: [multi_body, head]
+    spec: "§1.3 §3.2"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 2
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [head-tiangang, head-fenshen, body-flying-sword, body-flying-sword]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          count: 2
+          damage: 9.6
+          damage_type: 金
+          element: 金
+          pierce: 1
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+      consumed: [head-tiangang, head-fenshen, body-flying-sword, body-flying-sword]
+      spirit_after: 32
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spawn_count == 3
+        - spirit_after == 32
+
+  - id: VM-007
+    title: 游标从指定位置开始：只读 cursor=1 起的一句
+    category: [cursor]
+    spec: "§1.2"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-bifang-huo, body-flying-sword, foot-sha, head-urgent-order]
+        cursor: 1
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [body-flying-sword, foot-sha]
+      spirit_after: 37
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 3
+      round_ended: false
+      ready_at_tick_after: 0
+      event_codes: []
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - cursor_after == 3
+        - round_ended == false
+
+  - id: VM-008
+    title: 散符（乱序）牌堆：句边界由牌堆顺序决定，符脚仍归最近符胆
+    category: [cursor, shuffle, foot_attach]
+    spec: "§1.2"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 2
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: false
+        deck: [body-bifang-huo, body-flying-sword, foot-sha, head-urgent-order]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-bifang-huo
+          damage: 10
+          damage_type: 火
+          element: 火
+          payloads:
+            - {op: ignite, duration: 3, spread: true, damage_per_sec: 3}
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [body-bifang-huo, body-flying-sword, foot-sha]
+      spirit_after: 27
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 3
+      round_ended: false
+      ready_at_tick_after: 0
+      event_codes: []
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spawn_count == 2
+        - cursor_after == 3

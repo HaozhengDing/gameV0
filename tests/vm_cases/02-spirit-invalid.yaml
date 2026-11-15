@@ -1,0 +1,339 @@
+# T1 符箓 VM 用例 02：灵力、无效句、回符、回灵（VM-009 ~ VM-015）
+schema: gamev0.vm_cases/v0.1
+version: 0.1
+updated: "2026-11-15"
+spec: docs/tech/talisman-vm-spec.md
+cases:
+  - id: VM-009
+    title: 空符位与幻影符位被跳过：牌堆只剩两格可读
+    category: [cursor, phantom_slot, foot_attach, forbidden_phantom]
+    spec: "§1.2 §2.7"
+    initial:
+      tick: 0
+      sanity: 20
+      backlash: false
+      phantom_slots: [1]
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 2
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, foot-sha, body-bifang-huo, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+        - op: spawn_projectile
+          spell: body-bifang-huo
+          damage: 10
+          damage_type: 火
+          element: 火
+          payloads:
+            - {op: ignite, duration: 3, spread: true, damage_per_sec: 3}
+      consumed: [body-flying-sword, body-bifang-huo]
+      spirit_after: 35
+      sanity_after: 20
+      backlash_after: false
+      phantom_slots_after: [1]
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spawn_count == 2
+        - phantom_slots_after == [1]
+
+  - id: VM-010
+    title: 灵力不足：整句不念、不扣灵力、游标不动、不回符
+    category: [no_spirit]
+    spec: "§2.5"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 10
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-bifang-huo, foot-sha]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions: []
+      consumed: []
+      spirit_after: 10
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: false
+      ready_at_tick_after: 0
+      event_codes: [fizzle_no_spirit]
+      invariants:
+        - action_count == 0
+        - spirit_after == 10
+        - cursor_after == 0
+        - round_ended == false
+
+  - id: VM-011
+    title: 灵力恰好够：成本 18、灵力 18 仍可念，扣到 0
+    category: [no_spirit, boundary]
+    spec: "§2.5"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 18
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-bifang-huo, foot-sha]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-bifang-huo
+          damage: 10
+          damage_type: 火
+          element: 火
+          payloads:
+            - {op: ignite, duration: 3, spread: true, damage_per_sec: 3}
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [body-bifang-huo, foot-sha]
+      spirit_after: 0
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spirit_after == 0
+        - action_count == 3
+
+  - id: VM-012
+    title: 无效句：有符脚没符胆，扣灵力无动作，继续读下一句
+    category: [invalid_sentence]
+    spec: "§2.6"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 2
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [foot-sha, body-flying-sword]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+      consumed: [foot-sha, body-flying-sword]
+      spirit_after: 37
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [invalid_sentence, round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spirit_after == 37
+        - spawn_count == 1
+
+  - id: VM-013
+    title: 悬挂符头：牌堆末尾的敕·触是无效句，随后回符
+    category: [invalid_sentence, cursor]
+    spec: "§2.6"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 2
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, head-chu-touch]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+      consumed: [body-flying-sword, head-chu-touch]
+      spirit_after: 40
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [invalid_sentence, round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spirit_after == 40
+        - cursor_after == 0
+
+  - id: VM-014
+    title: 回符中拒绝施法：反噬保留，不消费
+    category: [forbidden_phantom, round]
+    spec: "§2.7 第 0 步"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: true
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 30
+        ordered: true
+        deck: [body-flying-sword, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: false
+      reject_reason: recharging
+      actions: []
+      consumed: []
+      spirit_after: 50
+      sanity_after: 100
+      backlash_after: true
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: false
+      ready_at_tick_after: 30
+      event_codes: [rejected_recharging]
+      invariants:
+        - accepted == false
+        - backlash_after == true
+        - action_count == 0
+        - spirit_after == 50
+
+  - id: VM-015
+    title: 归：句末返还 8 灵力，是唯一能改灵力的动作
+    category: [refund]
+    spec: "§2.5 §3.2"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-tudun, foot-hui]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-tudun
+          element: 土
+          payloads:
+            - {op: dig, radius: 2}
+        - op: refund_spirit
+          amount: 8
+      consumed: [body-tudun, foot-hui]
+      spirit_after: 48
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - spirit_after == 48
+        - spawn_count == 1

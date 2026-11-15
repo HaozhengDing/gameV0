@@ -1,0 +1,383 @@
+# T1 符箓 VM 用例 03：禁符 / 反噬 / 幻符 / 幻影符（VM-016 ~ VM-023）
+# 全部严格按 refs/cards/p0/systems.yaml S-0004 与 data/magic_numbers.json sanity 段；不新增数值。
+schema: gamev0.vm_cases/v0.1
+version: 0.1
+updated: "2026-11-15"
+spec: docs/tech/talisman-vm-spec.md
+cases:
+  - id: VM-016
+    title: 禁符：本次照常生效，−20 神智并置「下一次施法反噬」
+    category: [forbidden_phantom]
+    spec: "§2.7 第 5 步"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-forbidden-wulei, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-forbidden-wulei
+          damage: 60
+          damage_type: 雷
+          element: 雷
+      consumed: [body-forbidden-wulei]
+      spirit_after: 10
+      sanity_after: 80
+      backlash_after: true
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [forbidden_read, backlash_armed, round_end]
+      invariants:
+        - action_count <= 64
+        - spawn_count <= 32
+        - sanity_after == 80
+        - backlash_after == true
+
+  - id: VM-017
+    title: 反噬：下一发整次变为 1 个幻符，灵力照扣
+    category: [forbidden_phantom]
+    spec: "§2.7 第 2 步"
+    initial:
+      tick: 0
+      sanity: 60
+      backlash: true
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: "phantom-001"}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: phantom_cast
+          spell: phantom-001
+          reason: backlash
+          effect: {op: damage, amount: 6, damage_type: 阴}
+      consumed: [body-flying-sword]
+      spirit_after: 45
+      sanity_after: 60
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [backlash_consumed, round_end]
+      invariants:
+        - action_count == 1
+        - backlash_after == false
+        - spawn_count == 0
+        - spirit_after == 45
+
+  - id: VM-018
+    title: 反噬中念禁符：禁符不生效、也不扣神智（S-0004 phantom_rules 第 1 条）
+    category: [forbidden_phantom]
+    spec: "§2.7 第 2 步"
+    initial:
+      tick: 0
+      sanity: 100
+      backlash: true
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-forbidden-wulei, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: "phantom-002"}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: phantom_cast
+          spell: phantom-002
+          reason: backlash
+          effect: {op: spawn_material, material: yin_qi, shape: cloud, count: 1, radius: 3, duration: 2}
+      consumed: [body-forbidden-wulei]
+      spirit_after: 10
+      sanity_after: 100
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [backlash_consumed, round_end]
+      invariants:
+        - sanity_after == 100
+        - backlash_after == false
+        - spawn_count == 0
+        - action_count == 1
+
+  - id: VM-019
+    title: 反噬施法灵力不足仍必发：扣 min(灵力, 成本)，不能用空灵逃避
+    category: [forbidden_phantom, no_spirit]
+    spec: "§2.5 §2.7 第 2 步"
+    initial:
+      tick: 0
+      sanity: 60
+      backlash: true
+      phantom_slots: []
+      wand:
+        spirit: 3
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 2
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: "phantom-001"}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: phantom_cast
+          spell: phantom-001
+          reason: backlash
+          effect: {op: damage, amount: 6, damage_type: 阴}
+      consumed: [body-flying-sword]
+      spirit_after: 0
+      sanity_after: 60
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [backlash_consumed, round_end]
+      invariants:
+        - spirit_after == 0
+        - backlash_after == false
+        - action_count == 1
+        - spirit_after >= 0
+
+  - id: VM-020
+    title: <33 的 15% 幻符替换：主句第一个符胆变幻符，符脚仍作载荷
+    category: [forbidden_phantom, foot_attach]
+    spec: "§2.7 第 4 步"
+    initial:
+      tick: 0
+      sanity: 20
+      backlash: false
+      phantom_slots: [2]
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, foot-sha, body-bifang-huo, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 0.10, phantom_slot: null, phantom_card: "phantom-001"}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: phantom_cast
+          spell: phantom-001
+          reason: substitute
+          effect: {op: damage, amount: 6, damage_type: 阴}
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [body-flying-sword, foot-sha]
+      spirit_after: 37
+      sanity_after: 20
+      backlash_after: false
+      phantom_slots_after: [2]
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [phantom_substitute, round_end]
+      invariants:
+        - sanity_after == 20
+        - spawn_count == 0
+        - action_count == 1
+        - phantom_slots_after == [2]
+
+  - id: VM-021
+    title: <33 且本次含禁符：不掷 15% 骰，禁符正常生效
+    category: [forbidden_phantom]
+    spec: "§2.7 第 4/5 步"
+    initial:
+      tick: 0
+      sanity: 25
+      backlash: false
+      phantom_slots: [2]
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 3
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-forbidden-wulei, null, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 0.01, phantom_slot: null, phantom_card: "phantom-001"}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-forbidden-wulei
+          damage: 60
+          damage_type: 雷
+          element: 雷
+      consumed: [body-forbidden-wulei]
+      spirit_after: 10
+      sanity_after: 5
+      backlash_after: true
+      phantom_slots_after: [2]
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [forbidden_read, backlash_armed, round_end]
+      invariants:
+        - spawn_count == 1
+        - sanity_after == 5
+        - backlash_after == true
+        - phantom_slots_after == [2]
+
+  - id: VM-022
+    title: 幻影符填充：禁符使神智跌破 33，施法收尾时占 1 格
+    category: [forbidden_phantom]
+    spec: "§2.7 第 8 步"
+    initial:
+      tick: 0
+      sanity: 40
+      backlash: false
+      phantom_slots: []
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-forbidden-wulei, null, null, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: 2, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-forbidden-wulei
+          damage: 60
+          damage_type: 雷
+          element: 雷
+      consumed: [body-forbidden-wulei]
+      spirit_after: 10
+      sanity_after: 20
+      backlash_after: true
+      phantom_slots_after: [2]
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [forbidden_read, backlash_armed, round_end, phantom_slot_added]
+      invariants:
+        - sanity_after == 20
+        - phantom_slots_after == [2]
+        - action_count == 1
+        - spawn_count == 1
+
+  - id: VM-023
+    title: 幻影符清除：神智 ≥33 时在牌堆构建前清除，被占的符恢复可读
+    category: [forbidden_phantom]
+    spec: "§2.7 第 1 步"
+    initial:
+      tick: 0
+      sanity: 40
+      backlash: false
+      phantom_slots: [1]
+      wand:
+        spirit: 50
+        spirit_max: 80
+        regen_per_sec: 10
+        slots: 4
+        sentences_per_cast: 1
+        recharge_ticks: 30
+        ready_at_tick: 0
+        ordered: true
+        deck: [body-flying-sword, foot-sha, null, null]
+        cursor: 0
+    input:
+      op: cast
+      rng: {phantom_roll: 1.0, phantom_slot: null, phantom_card: null}
+    expect:
+      accepted: true
+      reject_reason: null
+      actions:
+        - op: spawn_projectile
+          spell: body-flying-sword
+          damage: 8
+          damage_type: 金
+          element: 金
+          pierce: 1
+          payloads:
+            - {op: explode, radius: 20, damage: 15, damage_type: 火}
+      consumed: [body-flying-sword, foot-sha]
+      spirit_after: 37
+      sanity_after: 40
+      backlash_after: false
+      phantom_slots_after: []
+      cursor_after: 0
+      round_ended: true
+      ready_at_tick_after: 30
+      event_codes: [phantom_slot_cleared, round_end]
+      invariants:
+        - phantom_slots_after == []
+        - action_count == 2
+        - spirit_after == 37
+        - sanity_after == 40
