@@ -125,12 +125,23 @@ void MaterialTable::init_builtin() {
     add(&defs_, SIM_MAT_OIL, "oil", "油", SIM_STATE_LIQUID, 0.9f, 0x6B4A22, true, true);
     add(&defs_, SIM_MAT_QUICKSILVER, "quicksilver", "水银", SIM_STATE_LIQUID, 13.6f, 0xB8C0C8, false, false);
     add(&defs_, SIM_MAT_FIRE, "fire", "火", SIM_STATE_GAS, 0.2f, 0xFF7A28, false, true);
+    // C-SIM v2（T4b）：data/materials.json 的其余 9 种。参数会被 JSON 覆盖（若可读到）。
+    add(&defs_, SIM_MAT_BLACK_DOG_BLOOD, "black_dog_blood", "黑狗血", SIM_STATE_LIQUID, 1.05f, 0x7A1F1F, false, false);
+    add(&defs_, SIM_MAT_COAL, "coal", "煤", SIM_STATE_POWDER, 1.4f, 0x2B2B2B, true, false);
+    add(&defs_, SIM_MAT_SALTPETER, "saltpeter", "硝石", SIM_STATE_POWDER, 2.1f, 0xD8D2C0, false, false);
+    add(&defs_, SIM_MAT_SULFUR, "sulfur", "硫磺", SIM_STATE_POWDER, 2.0f, 0xD9C63A, true, false);
+    add(&defs_, SIM_MAT_CINNABAR, "cinnabar", "朱砂", SIM_STATE_POWDER, 8.1f, 0xB23A2E, false, false);
+    add(&defs_, SIM_MAT_LIME, "lime", "石灰", SIM_STATE_POWDER, 3.3f, 0xE8E2D0, false, false);
+    add(&defs_, SIM_MAT_GLUTINOUS_RICE, "glutinous_rice", "糯米", SIM_STATE_POWDER, 0.8f, 0xF2EAD8, false, false);
+    add(&defs_, SIM_MAT_BAMBOO, "bamboo", "竹木", SIM_STATE_STATIC, 0.7f, 0x8FA05A, true, false);
+    add(&defs_, SIM_MAT_YIN_QI, "yin_qi", "阴气", SIM_STATE_GAS, 0.1f, 0x3A4A5A, false, false);
 
     // 运动参数（sim 内部，不暴露）。
     defs_[SIM_MAT_SAND].spread = 1;
     defs_[SIM_MAT_WATER].spread = 3;
     defs_[SIM_MAT_OIL].spread = 3;
     defs_[SIM_MAT_QUICKSILVER].spread = 1; // 粘稠：横向找平慢
+    defs_[SIM_MAT_BLACK_DOG_BLOOD].spread = 3;
     defs_[SIM_MAT_FIRE].fire_life_min = 40;
     defs_[SIM_MAT_FIRE].fire_life_max = 110;
     defs_[SIM_MAT_OIL].ignite_chance = 0.05f;
@@ -155,9 +166,10 @@ bool MaterialTable::load(const char* json_path) {
         warning_ = err + "; using builtin defaults";
         return false;
     }
-    overlay(by_id, "rock", &defs_, SIM_MAT_ROCK);
-    overlay(by_id, "water", &defs_, SIM_MAT_WATER);
-    overlay(by_id, "quicksilver", &defs_, SIM_MAT_QUICKSILVER);
+    // C-SIM v2：按 id_str 覆盖所有能从 data/materials.json 找到的物质（v1 只有 rock/water/quicksilver）
+    for (size_t i = 1; i < defs_.size(); ++i) {
+        overlay(by_id, defs_[i].id_str.c_str(), &defs_, static_cast<uint16_t>(i));
+    }
     source_ = canonical_source(json_path);
     // 校验：密度必须 > 0，状态不能是 empty（防止数据写坏导致模拟异常）。
     for (const MatDef& d : defs_) {

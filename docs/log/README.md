@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-16 | [2026-11-16-04-t4b-graybox.md](2026-11-16-04-t4b-graybox.md) | 更新 | 详细 | T4b 可玩灰盒：C-SIM v2、正式符卡数据、VM 接入；t4b-smoke 通过（化水→取水→灭火→通关） |
 | 2026-11-16 | [2026-11-16-03-t4a-godot-gdextension.md](2026-11-16-03-t4a-godot-gdextension.md) | 更新 | 详细 | T4a：Godot 4.5 + GDExtension 构建链跑通（真 sim_core 接入），一键构建 + headless 自检通过 |
 | 2026-11-16 | [2026-11-16-02-vm-spec-decisions-final.md](2026-11-16-02-vm-spec-decisions-final.md) | 决策 | 详细 | T1 六条决策全部按 AI 建议拍板；C-VM/C-ACT v0.1 进入契约冻结候选 |
 | 2026-11-16 | [2026-11-16-01-possession-scope-and-vm-decisions.md](2026-11-16-01-possession-scope-and-vm-decisions.md) | 决策 | 详细 | 入魔效果清单后移 M1 计划；不做角色机制分化（表现层先做）；VM 第 3 条定「整句不念」 |

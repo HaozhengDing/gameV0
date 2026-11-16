@@ -144,6 +144,8 @@
 **2026-11-16 进度**：T4a 已在用户的 Windows 电脑（Tailscale 直连）跑通——Godot 4.5 + godot-cpp 4.5，一键构建 `game/build.bat`/`build.sh`，GDExtension 直接接入已冻结的 C-SIM v1（无需桩）；headless 自检 `SMOKE_OK`、主场景 120 帧 `MAIN_EXIT=0`。复现/前置/限制见 `game/README.md`，记录见 docs/log/2026-11-16-03-t4a-godot-gdextension.md。
 - **T4b（W5–W7）**：接入真 `sim_core` 和 VM，做内容。
 
+**2026-11-16 进度**：T4b 可玩灰盒完成——Godot 灰盒（960×540 矿井、data/rooms 两房间按 tile_size=16 展开、走廊+火障+出口）、P0 四组符经真 VM 施法、葫芦吸/喷水油；组合时刻「化水银→取水→灭火→通关」由 `--t4b-smoke` 脚本化验证通过（exit 0）。为接入房间数据 C-SIM 升 v2（append-only 9 种 data 物质），新增 `data/talismans.json` 正式卡表 + 校验；截图 `docs/tech/t4b-graybox-2026-11-16.png`，记录见 docs/log/2026-11-16-04。用户本机试玩手感反馈待收集（T4b 不判 go/no-go）。
+
 **T4b 是什么**：通过 GDExtension 接入 `sim_core` 和 VM，做出 10 分钟的可玩内容：
 
 - 角色移动 + 挖掘

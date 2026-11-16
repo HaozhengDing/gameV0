@@ -51,6 +51,19 @@ public:
     Ref<Image> render_image() const;
     void update_texture();
 
+    // T4b：视口区域渲染（相机跟随用；只渲染当前可见的 480x270 区域）
+    Ref<Image> render_region(int32_t p_x, int32_t p_y, int32_t p_w, int32_t p_h) const;
+    void update_texture_region(int32_t p_x, int32_t p_y, int32_t p_w, int32_t p_h);
+    void wake_rect(int32_t p_x, int32_t p_y, int32_t p_w, int32_t p_h);
+
+    // T4b：角色移动/材质查询（GDScript 世界层用）
+    bool is_solid(int32_t p_x, int32_t p_y) const;
+    int32_t get_material_count() const;
+    int32_t get_material_state(int32_t p_material) const;
+    bool get_material_flammable(int32_t p_material) const;
+    String get_material_display(int32_t p_material) const;
+    String get_material_id_str(int32_t p_material) const;
+
     // 只读信息
     int32_t get_world_width() const;
     int32_t get_world_height() const;

@@ -37,10 +37,14 @@ set_target_properties(sim_core_embed PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(gdsim SHARED
     src/register_types.cpp
     src/sim_node.cpp
+    src/card_data.cpp
+    src/vm_node.cpp
+    "${SIM_CORE_DIR}/vm/src/cast.cpp"
 )
 target_include_directories(gdsim PRIVATE
     "${SIM_CORE_DIR}/include"
     "${SIM_CORE_DIR}/src"
+    "${SIM_CORE_DIR}/vm/include"
 )
 target_compile_options(gdsim PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W3> $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>)
 target_link_libraries(gdsim PRIVATE godot-cpp sim_core_embed)

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define SIM_C_SIM_VERSION 1u
+#define SIM_C_SIM_VERSION 2u
 #define SIM_CHUNK_SIZE 64u
 
 /* ------------------------------------------------------------------ */
@@ -56,7 +56,8 @@ typedef enum sim_state {
     SIM_STATE_STATIC = 4  /* 静态固体：不动，可被 dig 挖掉 */
 } sim_state;
 
-/* 内置物质 id。v1 固定 7 个；未来扩展必须追加，不能改已有数值。 */
+/* 内置物质 id。v1 固定 7 个；v2（T4b）追加 9 种 data 物质，**已有数值不变**。
+ * 未来扩展仍必须只在末尾追加，不能改已有数值。 */
 typedef enum sim_material {
     SIM_MAT_EMPTY = 0,
     SIM_MAT_ROCK = 1,        /* 岩（data/materials.json: rock） */
@@ -65,7 +66,17 @@ typedef enum sim_material {
     SIM_MAT_OIL = 4,         /* 油（sim 实验物质，可燃） */
     SIM_MAT_QUICKSILVER = 5, /* 水银（data/materials.json: quicksilver，密度 13.6） */
     SIM_MAT_FIRE = 6,        /* 火（sim 实验物质，带寿命的气体） */
-    SIM_MAT_COUNT_ = 7       /* 有效 id 上界（不含） */
+    /* ---- C-SIM v2（T4b 起）：data/materials.json 的其余 9 种，运行时从 data 读参数 ---- */
+    SIM_MAT_BLACK_DOG_BLOOD = 7, /* 黑狗血（extends water，液体） */
+    SIM_MAT_COAL = 8,            /* 煤（powder，可燃） */
+    SIM_MAT_SALTPETER = 9,       /* 硝石（powder） */
+    SIM_MAT_SULFUR = 10,         /* 硫磺（powder，可燃） */
+    SIM_MAT_CINNABAR = 11,       /* 朱砂（powder） */
+    SIM_MAT_LIME = 12,           /* 石灰（powder） */
+    SIM_MAT_GLUTINOUS_RICE = 13, /* 糯米（powder） */
+    SIM_MAT_BAMBOO = 14,         /* 竹木（static，可燃） */
+    SIM_MAT_YIN_QI = 15,         /* 阴气（gas） */
+    SIM_MAT_COUNT_ = 16       /* 有效 id 上界（不含） */
 } sim_material;
 
 /* 单个 cell 的只读快照。 */

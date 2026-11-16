@@ -1,7 +1,7 @@
 # sim_core
 
 无引擎依赖的格子物质模拟库（C++17 + CMake），服务于《刍狗》M0 实验 A / T2。
-公开头文件 <code>include/sim/c_sim.h</code> 即对外契约 **C-SIM v1**（C ABI，供 T4 的 Godot GDExtension
+公开头文件 <code>include/sim/c_sim.h</code> 即对外契约 **C-SIM v2**（C ABI，供 T4 的 Godot GDExtension
 直接调用）；基准程序无界面，PNG 用 zlib 自己写，不引第三方依赖。
 
 当前范围（按 D4 / T2 定）：
@@ -10,8 +10,9 @@
 - chunk 64×64 + 脏矩形 + 活动区（只模拟视口附近）+ chunk 休眠调度
 - 物质状态：powder / liquid / gas / static
 - 5 种物质：沙 sand、水 water、油 oil、火 fire（带寿命）、水银 quicksilver（密度 13.6）+ 岩 rock
+- C-SIM v2（T4b）追加 9 种 data 物质：black_dog_blood / coal / saltpeter / sulfur / cinnabar / lime / glutinous_rice / bamboo / yin_qi（参数仍从 data/materials.json 读）
 - 挖掘 dig（移除实心/粉末格，部分变沙碎屑）
-- water / quicksilver / rock 参数运行时读 <code>data/materials.json</code>；沙/油/火是 sim 内实验物质
+- 13 种 data 物质参数运行时读 <code>data/materials.json</code>；沙/油/火是 sim 内实验物质（v1 仅 3 种 data 物质，v2 起按 id_str 自动覆盖全部 data 物质）
   （不改 <code>data/</code>）；读不到 JSON 时回退编译期默认值并提示
 - **不做**：刚体碎裂、多线程、温度/相变/完整反应表、持久化（按 D4 排除）
 
@@ -36,7 +37,7 @@
 | sim_dig | 圆形挖掘移除实心格、碎屑沙、圆外不受影响、DIG 事件 |
 | sim_conservation | 封闭石墙内沙/水/油/水银 500 tick 数量守恒；边界不被写出 |
 | sim_api_contract | chunk 载入/卸载、脏矩形、活动区、渲染、事件、材质表、越界安全 |
-| sim_materials_json | 从 data/materials.json 读取 water/quicksilver/rock 参数；沙/油/火为实验物质 |
+| sim_materials_json | 从 data/materials.json 读取全部 data 物质参数（v2：含 coal/bamboo/yin_qi/black_dog_blood 等）；沙/油/火为实验物质 |
 
 测试程序也可单独跑：<code>./build/sim_core_tests all --materials ../data/materials.json</code>
 （不传 <code>--materials</code> 时用编译期默认材质）。
@@ -64,7 +65,7 @@
 ## 目录结构
 
     sim_core/
-      include/sim/c_sim.h      # 契约 C-SIM v1（公开头文件，含单位/语义注释）
+      include/sim/c_sim.h      # 契约 C-SIM v2（公开头文件，含单位/语义注释）
       src/world.cpp            # 世界/chunk/物质运动/挖掘/脏矩形/休眠/事件/渲染/hash
       src/materials.{h,cpp}    # 材质表 + data/materials.json 覆盖 + 路径查找
       src/json_lite.{h,cpp}    # 无依赖最小 JSON 读取器

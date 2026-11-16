@@ -5,6 +5,7 @@
 #include <godot_cpp/godot.hpp>
 
 #include "sim_node.h"
+#include "vm_node.h"
 
 using namespace godot;
 
@@ -13,6 +14,7 @@ void initialize_gdsim_module(ModuleInitializationLevel p_level) {
         return;
     }
     GDREGISTER_CLASS(SimWorldNode);
+    GDREGISTER_CLASS(TalismanVMNode);
 }
 
 void uninitialize_gdsim_module(ModuleInitializationLevel p_level) {

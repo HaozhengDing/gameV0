@@ -339,6 +339,230 @@ def validate_cards():
     print(f"cards: {n} 张")
 
 
+TALISMAN_OPS = {
+    "spawn_projectile", "explode", "damage", "ignite", "spawn_cloud", "purify", "barrier",
+    "grant_temp_slot", "convert_material", "spawn_material", "dig", "apply_status",
+    "extinguish_lantern", "drain_life", "refund_spirit", "phantom_cast",
+}
+TALISMAN_OP_REQUIRED = {
+    "spawn_projectile": ["spell"],
+    "explode": ["radius", "damage", "damage_type"],
+    "damage": ["amount", "damage_type"],
+    "ignite": ["duration"],
+    "spawn_cloud": ["kind", "radius", "duration"],
+    "purify": ["removes"],
+    "barrier": ["effect"],
+    "convert_material": ["source", "to"],
+    "spawn_material": ["material", "shape"],
+    "dig": ["radius"],
+    "apply_status": ["status", "duration"],
+    "extinguish_lantern": ["lanterns"],
+    "drain_life": ["amount"],
+    "refund_spirit": ["amount"],
+    "phantom_cast": ["spell", "reason", "effect"],
+}
+
+
+def _walk_actions(obj):
+    """递归找出所有带 op 的动作对象（C-ACT）。"""
+    found = []
+    if isinstance(obj, dict):
+        if isinstance(obj.get("op"), str):
+            found.append(obj)
+        for v in obj.values():
+            found.extend(_walk_actions(v))
+    elif isinstance(obj, list):
+        for v in obj:
+            found.extend(_walk_actions(v))
+    return found
+
+
+def _action_material_refs(obj):
+    """动作里引用的物质 id：material/to/removes/produces + source.material。"""
+    refs = []
+    if isinstance(obj, dict):
+        for key in ("material", "to", "removes", "produces"):
+            if isinstance(obj.get(key), str):
+                refs.append(obj[key])
+        if isinstance(obj.get("source"), dict) and isinstance(obj["source"].get("material"), str):
+            refs.append(obj["source"]["material"])
+        for v in obj.values():
+            refs.extend(_action_material_refs(v))
+    elif isinstance(obj, list):
+        for v in obj:
+            refs.extend(_action_material_refs(v))
+    return refs
+
+
+def validate_talismans(material_ids):
+    """校验 data/talismans.json（C-VM 正式卡表）：结构 + 动作 + 物质引用 + 组成本 + 与用例/卡片的交叉一致性。"""
+    data = load_json("data/talismans.json")
+    if data is None:
+        return
+    for key in ("schema", "version", "updated"):
+        if not data.get(key):
+            err(f"data/talismans.json: 缺少 {key}")
+
+    cards = data.get("cards") or {}
+    by_id = {}
+    segment_of = {}
+    section_names = {"heads": "head", "bodies": "body", "feet": "foot"}
+    for section, segment in section_names.items():
+        arr = cards.get(section)
+        if not isinstance(arr, list) or not arr:
+            err(f"data/talismans.json: cards.{section} 必须是非空数组")
+            continue
+        for i, card in enumerate(arr):
+            if not isinstance(card, dict):
+                err(f"data/talismans.json: cards.{section}[{i}] 不是对象")
+                continue
+            cid = card.get("id")
+            if not cid:
+                err(f"data/talismans.json: cards.{section}[{i}] 缺 id")
+                continue
+            if cid in by_id:
+                err(f"data/talismans.json: 重复 id {cid}")
+            by_id[cid] = card
+            segment_of[cid] = segment
+            if not card.get("name"):
+                err(f"data/talismans.json: {cid} 缺 name")
+            cost = card.get("spirit_cost")
+            if not isinstance(cost, (int, float)) or isinstance(cost, bool) or cost < 0:
+                err(f"data/talismans.json: {cid} spirit_cost 必须是非负数字")
+            if "forbidden" in card and not isinstance(card["forbidden"], bool):
+                err(f"data/talismans.json: {cid} forbidden 必须是 bool")
+            if segment == "head" and not isinstance(card.get("effect"), dict):
+                err(f"data/talismans.json: {cid}（符头）缺 effect 对象")
+            if segment == "foot":
+                timing = card.get("timing")
+                if timing is not None and timing != "sentence_end":
+                    err(f"data/talismans.json: {cid} timing 只能是 sentence_end")
+                if not isinstance(card.get("action"), dict):
+                    err(f"data/talismans.json: {cid}（符脚）缺 action 对象")
+            if segment == "body" and not isinstance(card.get("damage", 0), (int, float)):
+                err(f"data/talismans.json: {cid} damage 必须是数字")
+            # C-ACT 动作校验（body.payloads / foot.action / phantom.effect）
+            ops_src = []
+            if segment == "body":
+                ops_src = card.get("payloads", [])
+            elif segment == "foot":
+                ops_src = card.get("action")
+            for action in _walk_actions(ops_src):
+                op = action["op"]
+                if op not in TALISMAN_OPS:
+                    err(f"data/talismans.json: {cid} 未知动作 op {op}")
+                    continue
+                for field in TALISMAN_OP_REQUIRED[op]:
+                    if field not in action:
+                        err(f"data/talismans.json: {cid} 动作 {op} 缺字段 {field}")
+                for mat in _action_material_refs(action):
+                    if mat not in material_ids:
+                        err(f"data/talismans.json: {cid} 动作 {op} 引用未定义物质 {mat}")
+
+    phantoms = data.get("phantom_pool") or []
+    if not isinstance(phantoms, list):
+        err("data/talismans.json: phantom_pool 必须是数组")
+        phantoms = []
+    for p in phantoms:
+        if not isinstance(p, dict) or not p.get("id"):
+            err("data/talismans.json: phantom_pool 项缺 id")
+            continue
+        pid = p["id"]
+        if pid in by_id:
+            err(f"data/talismans.json: 重复 id {pid}")
+        by_id[pid] = p
+        segment_of[pid] = "phantom"
+        if not isinstance(p.get("effect"), dict):
+            err(f"data/talismans.json: {pid} 缺 effect")
+            continue
+        for action in _walk_actions(p["effect"]):
+            op = action["op"]
+            if op not in TALISMAN_OPS:
+                err(f"data/talismans.json: {pid} 未知动作 op {op}")
+            for mat in _action_material_refs(action):
+                if mat not in material_ids:
+                    err(f"data/talismans.json: {pid} 引用未定义物质 {mat}")
+
+    groups = data.get("groups")
+    if not isinstance(groups, list) or not groups:
+        err("data/talismans.json: groups 必须是非空数组")
+        groups = []
+    group_ids = set()
+    refs_cards = {}
+    try:
+        refs_data = load_yaml("refs/cards/p0/talismans.yaml") or []
+        for card in refs_data:
+            if isinstance(card, dict) and card.get("id"):
+                refs_cards[card["id"]] = card
+    except Exception:  # noqa: BLE001
+        pass
+    for g in groups:
+        if not isinstance(g, dict) or not g.get("id"):
+            err("data/talismans.json: groups 项缺 id")
+            continue
+        gid = g["id"]
+        if gid in group_ids:
+            err(f"data/talismans.json: 组 id 重复 {gid}")
+        group_ids.add(gid)
+        segs = g.get("segments")
+        if not isinstance(segs, list) or not segs:
+            err(f"data/talismans.json: 组 {gid} segments 必须非空")
+            continue
+        for sid in segs:
+            if sid not in by_id:
+                err(f"data/talismans.json: 组 {gid} 引用未定义卡 {sid}")
+        total = 0.0
+        saw_body = False
+        for i, sid in enumerate(segs):
+            seg = segment_of.get(sid)
+            if i == 0:
+                pass
+            if seg == "head" and saw_body:
+                err(f"data/talismans.json: 组 {gid} 符头必须都在符胆之前")
+            if seg == "body":
+                if saw_body:
+                    err(f"data/talismans.json: 组 {gid} 一句只能有一个符胆")
+                saw_body = True
+            if seg == "phantom":
+                err(f"data/talismans.json: 组 {gid} 不能引用幻符")
+            total += by_id.get(sid, {}).get("spirit_cost", 0) if sid in by_id else 0
+        if not saw_body:
+            err(f"data/talismans.json: 组 {gid} 缺符胆")
+        cost = g.get("spirit_cost")
+        if not isinstance(cost, (int, float)):
+            err(f"data/talismans.json: 组 {gid} 缺 spirit_cost")
+        elif abs(cost - total) > 1e-9:
+            err(f"data/talismans.json: 组 {gid} spirit_cost {cost} != 各段之和 {total}")
+        if gid in refs_cards:
+            ref_cost = (refs_cards[gid].get("numbers") or {}).get("spirit_cost")
+            if isinstance(ref_cost, (int, float)) and isinstance(cost, (int, float)):
+                if abs(ref_cost - cost) > 1e-9:
+                    err(f"data/talismans.json: 组 {gid} spirit_cost {cost} 与 refs 卡面 {ref_cost} 不一致")
+
+    # 与 T1 测试替身卡表交叉校验（防止正式数据与契约用例漂移）
+    try:
+        vm_cards = load_yaml("tests/vm_cases/cards.yaml") or {}
+        vm_by_id = {}
+        for section in ("head", "body", "foot"):
+            for card in ((vm_cards.get("segments") or {}).get(section) or []):
+                if isinstance(card, dict) and card.get("id"):
+                    vm_by_id[card["id"]] = card
+        for pid in vm_cards.get("phantom_pool") or []:
+            if isinstance(pid, dict) and pid.get("id"):
+                vm_by_id[pid["id"]] = pid
+        for cid, card in by_id.items():
+            other = vm_by_id.get(cid)
+            if other is None:
+                continue
+            for field in ("spirit_cost", "forbidden", "element", "damage", "damage_type"):
+                if field in other and card.get(field) != other.get(field):
+                    err(f"data/talismans.json: {cid}.{field} 与 tests/vm_cases/cards.yaml 不一致（{card.get(field)!r} != {other.get(field)!r}）")
+    except Exception:  # noqa: BLE001
+        pass
+
+    print(f"talismans: {len(by_id)} 卡 | {len(groups)} 组")
+
+
 def validate_vm_cases():
     """C-VM 用例守护（T1）：调用 tests/vm_cases/validate_cases.py 做结构 / 算术 / 不变量自检。
 
@@ -367,6 +591,7 @@ def main():
     room_map = load_rooms(material_ids, material_by_id)
     validate_biomes(room_map, material_by_id, material_ids, reaction_ids)
     validate_cards()
+    validate_talismans(material_ids)
     validate_vm_cases()
 
     print(f"materials: {len(material_ids)} | reactions: {len(reaction_ids)} | rooms: {len(room_map)}")

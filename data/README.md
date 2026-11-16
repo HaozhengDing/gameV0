@@ -13,6 +13,7 @@ data/
   README.md                         # 本文件
   magic_numbers.json                # 全局调参
   materials.json                    # 12 种物质 + 8 条反应
+  talismans.json                    # 正式符卡表（C-VM 输入，T4b 新增）
   biomes/
     level-01-coalmine.json          # 第 1 层：矿井
   rooms/
@@ -44,6 +45,16 @@ data/
 
 v0：12 种物质、8 条反应；与 P0 系统卡 S-0003 对齐。偏离项写在文件内 `v1_deviations`。
 
+## 4b. talismans.json 符卡数据（T4b 新增）
+
+- 用途：符箓 VM（契约 C-VM / C-ACT，见 `docs/tech/talisman-vm-spec.md`）的**正式卡表输入**；T4b 起 Godot 侧 `TalismanVMNode.load_cards()` 读它，按 `groups` 施法。
+- 结构：`cards.heads / bodies / feet`（符头 / 符胆 / 符脚）+ `phantom_pool`（幻符）+ `groups`（P0 四组符 F-0001~F-0004）+ `wand_defaults`。
+- 动作字段（`payloads` / `action` / `effect`）是 C-ACT：op 必须在 spec §3.2 的 16 种内；动作里引用的物质 id 必须存在于 `materials.json`。
+- `groups[].segments` 按牌堆顺序：符头* → 符胆 → 符脚*；`spirit_cost` 必须等于各段 `spirit_cost` 之和。
+- 与 `tests/vm_cases/cards.yaml`（T1 测试替身）的重叠卡：`tools/validate_data.py` 会交叉校验 spirit_cost / forbidden / element / damage 等字段，防止正式数据与契约用例漂移。
+- 与 P0 卡面：`tools/validate_data.py` 还会核对 `groups[].spirit_cost` 与 `refs/cards/p0/talismans.yaml` 的 `numbers.spirit_cost`。
+- 数值来源与偏差：见文件内 `v1_deviations`（归 的 cost 0 例外、数据缺口）。
+
 ## 5. magic_numbers.json
 
 分组：`design / player / sanity / elements / economy / enemy_curve / layers / layer_01`；偏离项写在 `v1_deviations`。
@@ -74,6 +85,7 @@ v0：12 种物质、8 条反应；与 P0 系统卡 S-0003 对齐。偏离项写�
 字段：`size / tile_size / grid / legend / entities / hazards / intended_rules / notes`。
 
 - `grid`：字符串数组，每行 `w` 个字符；`legend` 把字符映射到物质 id 或 `empty`。
+- `tile_size`：**每个网格字符在世界里的边长（cells）**。1 cell = 1 世界像素（D4），所以房间世界尺寸 = `w×tile_size` × `h×tile_size` cells；T4b 起按 16 展开（24×14 字符 = 384×224 cells ≈ 0.8 屏）。
 - `entities`：`id / type / x / y / payload`；坐标必须在非实心格。
 - 房间是「数据版手工房间」；以后可以导出成 Godot 场景，格式不变。
 
@@ -96,7 +108,7 @@ v0：12 种物质、8 条反应；与 P0 系统卡 S-0003 对齐。偏离项写�
 
 ## 10. 校验与后续
 
-- 本批 JSON 已用 Python 校验：引用可解析、网格尺寸、实体落点。
+- 本批 JSON 已用 Python 校验：引用可解析、网格尺寸、实体落点；`talismans.json` 另校验 C-ACT op/物质引用/组成本，并与 T1 用例卡表、P0 卡面交叉核对。
 - 后续：加 JSON Schema；Godot 导入器（JSON → Resource）；热重载；mod 覆盖。
 - 不做：XML + Lua 双语言；照搬 Noita 数值/资产；过早设计 mod API。
 

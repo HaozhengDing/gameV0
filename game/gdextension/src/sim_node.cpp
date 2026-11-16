@@ -27,6 +27,16 @@ void SimWorldNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("render_image"), &SimWorldNode::render_image);
     ClassDB::bind_method(D_METHOD("update_texture"), &SimWorldNode::update_texture);
 
+    ClassDB::bind_method(D_METHOD("render_region", "x", "y", "w", "h"), &SimWorldNode::render_region);
+    ClassDB::bind_method(D_METHOD("update_texture_region", "x", "y", "w", "h"), &SimWorldNode::update_texture_region);
+    ClassDB::bind_method(D_METHOD("wake_rect", "x", "y", "w", "h"), &SimWorldNode::wake_rect);
+    ClassDB::bind_method(D_METHOD("is_solid", "x", "y"), &SimWorldNode::is_solid);
+    ClassDB::bind_method(D_METHOD("get_material_count"), &SimWorldNode::get_material_count);
+    ClassDB::bind_method(D_METHOD("get_material_state", "material"), &SimWorldNode::get_material_state);
+    ClassDB::bind_method(D_METHOD("get_material_flammable", "material"), &SimWorldNode::get_material_flammable);
+    ClassDB::bind_method(D_METHOD("get_material_display", "material"), &SimWorldNode::get_material_display);
+    ClassDB::bind_method(D_METHOD("get_material_id_str", "material"), &SimWorldNode::get_material_id_str);
+
     ClassDB::bind_method(D_METHOD("get_world_width"), &SimWorldNode::get_world_width);
     ClassDB::bind_method(D_METHOD("get_world_height"), &SimWorldNode::get_world_height);
     ClassDB::bind_method(D_METHOD("get_tick"), &SimWorldNode::get_tick);
@@ -182,6 +192,123 @@ void SimWorldNode::update_texture() {
     }
 }
 
+
+Ref<Image> SimWorldNode::render_region(int32_t p_x, int32_t p_y, int32_t p_w, int32_t p_h) const {
+    ERR_FAIL_NULL_V(world_, Ref<Image>());
+    if (p_w <= 0 || p_h <= 0) {
+        return Ref<Image>();
+    }
+    const int32_t world_w = static_cast<int32_t>(sim_world_width(world_));
+    const int32_t world_h = static_cast<int32_t>(sim_world_height(world_));
+    // 允许越界：C-SIM 的 render 越界返回 -1；这里先裁剪到世界内，避免相机边缘报错
+    int32_t x = p_x < 0 ? 0 : p_x;
+    int32_t y = p_y < 0 ? 0 : p_y;
+    int32_t w = p_w;
+    int32_t h = p_h;
+    if (x + w > world_w) {
+        w = world_w - x;
+    }
+    if (y + h > world_h) {
+        h = world_h - y;
+    }
+    if (w <= 0 || h <= 0) {
+        return Ref<Image>();
+    }
+    PackedByteArray pixels;
+    pixels.resize(static_cast<int64_t>(w) * h * 4);
+    sim_rect rect{x, y, w, h};
+    const int rc = sim_world_render_rgba8(world_, rect, pixels.ptrw(), static_cast<size_t>(pixels.size()));
+    if (rc != 0) {
+        ERR_PRINT("SimWorldNode.render_region: sim_world_render_rgba8 失败");
+        return Ref<Image>();
+    }
+    return Image::create_from_data(w, h, false, Image::FORMAT_RGBA8, pixels);
+}
+
+void SimWorldNode::update_texture_region(int32_t p_x, int32_t p_y, int32_t p_w, int32_t p_h) {
+    Ref<Image> image = render_region(p_x, p_y, p_w, p_h);
+    if (image.is_null()) {
+        return;
+    }
+    Ref<ImageTexture> texture = get_texture();
+    if (texture.is_null() || texture->get_width() != image->get_width() ||
+        texture->get_height() != image->get_height()) {
+        texture = ImageTexture::create_from_image(image);
+        set_texture(texture);
+    } else {
+        texture->update(image);
+    }
+}
+
+void SimWorldNode::wake_rect(int32_t p_x, int32_t p_y, int32_t p_w, int32_t p_h) {
+    ERR_FAIL_NULL(world_);
+    sim_rect rect{p_x, p_y, p_w, p_h};
+    sim_world_wake_rect(world_, rect);
+}
+
+bool SimWorldNode::is_solid(int32_t p_x, int32_t p_y) const {
+    if (world_ == nullptr) {
+        return false;
+    }
+    const sim_cell cell = sim_world_get_cell(world_, p_x, p_y);
+    if (cell.material == SIM_MAT_EMPTY) {
+        return false;
+    }
+    sim_material_info info{};
+    if (sim_world_material_info(world_, cell.material, &info) != 0) {
+        return false;
+    }
+    return info.state == SIM_STATE_STATIC || info.state == SIM_STATE_POWDER;
+}
+
+int32_t SimWorldNode::get_material_count() const {
+    return world_ == nullptr ? 0 : static_cast<int32_t>(sim_world_material_count(world_));
+}
+
+int32_t SimWorldNode::get_material_state(int32_t p_material) const {
+    if (world_ == nullptr || p_material < 0) {
+        return -1;
+    }
+    sim_material_info info{};
+    if (sim_world_material_info(world_, static_cast<uint16_t>(p_material), &info) != 0) {
+        return -1;
+    }
+    return static_cast<int32_t>(info.state);
+}
+
+bool SimWorldNode::get_material_flammable(int32_t p_material) const {
+    if (world_ == nullptr || p_material < 0) {
+        return false;
+    }
+    sim_material_info info{};
+    if (sim_world_material_info(world_, static_cast<uint16_t>(p_material), &info) != 0) {
+        return false;
+    }
+    return info.flammable != 0;
+}
+
+String SimWorldNode::get_material_display(int32_t p_material) const {
+    if (world_ == nullptr || p_material < 0) {
+        return String();
+    }
+    sim_material_info info{};
+    if (sim_world_material_info(world_, static_cast<uint16_t>(p_material), &info) != 0) {
+        return String();
+    }
+    return String::utf8(info.display);
+}
+
+String SimWorldNode::get_material_id_str(int32_t p_material) const {
+    if (world_ == nullptr || p_material < 0) {
+        return String();
+    }
+    sim_material_info info{};
+    if (sim_world_material_info(world_, static_cast<uint16_t>(p_material), &info) != 0) {
+        return String();
+    }
+    return String::utf8(info.id_str);
+}
+
 int32_t SimWorldNode::get_world_width() const {
     return world_ == nullptr ? 0 : static_cast<int32_t>(sim_world_width(world_));
 }
@@ -195,7 +322,7 @@ int64_t SimWorldNode::get_tick() const {
 }
 
 String SimWorldNode::get_materials_source() const {
-    return world_ == nullptr ? String() : String(sim_world_materials_source(world_));
+    return world_ == nullptr ? String() : String::utf8(sim_world_materials_source(world_));
 }
 
 int64_t SimWorldNode::get_state_hash() const {

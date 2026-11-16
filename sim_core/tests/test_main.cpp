@@ -356,6 +356,19 @@ bool test_materials_json(const std::string& materials) {
     CHECK(sim_world_material_info(w, SIM_MAT_FIRE, &info) == 0);
     CHECK(info.experimental == 1);
     CHECK(info.state == SIM_STATE_GAS);
+    // C-SIM v2：data 里的其余 9 种物质都必须可用（T4b 房间数据依赖）
+    CHECK(sim_world_material_info(w, SIM_MAT_COAL, &info) == 0);
+    CHECK(info.state == SIM_STATE_POWDER);
+    CHECK(info.flammable == 1);
+    CHECK_NEAR(info.density, 1.4, 1e-6);
+    CHECK(sim_world_material_info(w, SIM_MAT_BAMBOO, &info) == 0);
+    CHECK(info.state == SIM_STATE_STATIC);
+    CHECK(info.flammable == 1);
+    CHECK(sim_world_material_info(w, SIM_MAT_YIN_QI, &info) == 0);
+    CHECK(info.state == SIM_STATE_GAS);
+    CHECK(sim_world_material_info(w, SIM_MAT_BLACK_DOG_BLOOD, &info) == 0);
+    CHECK(info.state == SIM_STATE_LIQUID);  // extends: water
+    CHECK_NEAR(info.density, 1.05, 1e-6);
     sim_world_destroy(w);
     return true;
 }

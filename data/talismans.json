@@ -1,0 +1,278 @@
+{
+  "schema": "gamev0.talismans/v0.1",
+  "version": "0.1",
+  "updated": "2026-11-16",
+  "description": "正式符卡数据（T4b 起符箓 VM 的输入来源）：符头 / 符胆 / 符脚 / 幻符 + P0 符组。数值来自 docs/design §3.3、refs/cards/p0/talismans.yaml 与 S-0002；与 tests/vm_cases/cards.yaml 的重叠项由 tools/validate_data.py 交叉校验。",
+  "wand_defaults": {
+    "spirit": 80,
+    "spirit_max": 80,
+    "regen_per_sec": 10,
+    "slots": 8,
+    "sentences_per_cast": 1,
+    "recharge_ticks": 30,
+    "ordered": true
+  },
+  "cards": {
+    "heads": [
+      {
+        "id": "head-urgent-order",
+        "name": "急急如律令",
+        "spirit_cost": 3,
+        "effect": {
+          "cast_interval_delta_ticks": -6
+        },
+        "note": "施法间隔 −0.1s；VM 只记录，不改动作。"
+      },
+      {
+        "id": "head-tiangang",
+        "name": "天罡",
+        "spirit_cost": 3,
+        "effect": {
+          "damage_mult": 1.2
+        },
+        "note": "本句伤害类动作 ×1.2。"
+      },
+      {
+        "id": "head-chu-touch",
+        "name": "敕·触",
+        "spirit_cost": 5,
+        "effect": {
+          "trigger": "on_hit"
+        },
+        "note": "命中触发预读的下一句（静态展开）。"
+      },
+      {
+        "id": "head-feng-shi",
+        "name": "奉·时",
+        "spirit_cost": 5,
+        "effect": {
+          "trigger": "on_expire"
+        },
+        "note": "ttl 到期触发预读的下一句。"
+      },
+      {
+        "id": "head-fenshen",
+        "name": "分身",
+        "spirit_cost": 5,
+        "effect": {
+          "projectile_mult": 2
+        },
+        "note": "本句投射物 ×2，可叠加。"
+      }
+    ],
+    "bodies": [
+      {
+        "id": "body-flying-sword",
+        "name": "飞剑",
+        "spirit_cost": 5,
+        "element": "金",
+        "damage": 8,
+        "damage_type": "金",
+        "pierce": 1
+      },
+      {
+        "id": "body-bifang-huo",
+        "name": "毕方火",
+        "spirit_cost": 10,
+        "element": "火",
+        "damage": 10,
+        "damage_type": "火",
+        "payloads": [
+          {
+            "op": "ignite",
+            "duration": 3,
+            "spread": true,
+            "damage_per_sec": 3
+          }
+        ]
+      },
+      {
+        "id": "body-gui-huo",
+        "name": "鬼火",
+        "spirit_cost": 8,
+        "element": "阴",
+        "damage": 0,
+        "damage_type": "阴",
+        "payloads": [
+          {
+            "op": "extinguish_lantern",
+            "lanterns": 0.3
+          }
+        ]
+      },
+      {
+        "id": "body-tudun",
+        "name": "土遁",
+        "spirit_cost": 10,
+        "element": "土",
+        "damage": 0,
+        "payloads": [
+          {
+            "op": "dig",
+            "radius": 2
+          }
+        ]
+      },
+      {
+        "id": "body-tengsheng",
+        "name": "藤生",
+        "spirit_cost": 12,
+        "element": "木",
+        "damage": 0,
+        "payloads": [
+          {
+            "op": "spawn_material",
+            "material": "bamboo",
+            "shape": "pool",
+            "count": 3,
+            "radius": 2
+          }
+        ]
+      },
+      {
+        "id": "body-forbidden-wulei",
+        "name": "禁符·五雷",
+        "spirit_cost": 40,
+        "element": "雷",
+        "damage": 60,
+        "damage_type": "雷",
+        "forbidden": true,
+        "note": "S-0004：念出 −20 神智并置下一次反噬；本次照常生效。"
+      }
+    ],
+    "feet": [
+      {
+        "id": "foot-sha",
+        "name": "煞",
+        "spirit_cost": 8,
+        "action": {
+          "op": "explode",
+          "radius": 20,
+          "damage": 15,
+          "damage_type": "火"
+        }
+      },
+      {
+        "id": "foot-zhen",
+        "name": "镇",
+        "spirit_cost": 12,
+        "action": {
+          "op": "apply_status",
+          "status": "stun",
+          "duration": 1.5
+        }
+      },
+      {
+        "id": "foot-shi",
+        "name": "噬",
+        "spirit_cost": 12,
+        "action": {
+          "op": "drain_life",
+          "amount": 4
+        }
+      },
+      {
+        "id": "foot-hua-water",
+        "name": "化·水",
+        "spirit_cost": 30,
+        "action": {
+          "op": "convert_material",
+          "source": {
+            "tags": [
+              "liquid",
+              "solid",
+              "powder"
+            ]
+          },
+          "to": "water",
+          "radius": 2
+        }
+      },
+      {
+        "id": "foot-hui",
+        "name": "归",
+        "spirit_cost": 0,
+        "timing": "sentence_end",
+        "action": {
+          "op": "refund_spirit",
+          "amount": 8
+        },
+        "note": "句末立即结算；S-0002 符脚 +8~+30 的唯一例外（spec §7.3 #4 已拍板）。"
+      }
+    ]
+  },
+  "phantom_pool": [
+    {
+      "id": "phantom-001",
+      "name": "幻符·阴噬（占位）",
+      "effect": {
+        "op": "damage",
+        "amount": 6,
+        "damage_type": "阴"
+      }
+    },
+    {
+      "id": "phantom-002",
+      "name": "幻符·阴气涌（占位）",
+      "effect": {
+        "op": "spawn_material",
+        "material": "yin_qi",
+        "shape": "cloud",
+        "count": 1,
+        "radius": 3,
+        "duration": 2
+      }
+    }
+  ],
+  "groups": [
+    {
+      "id": "F-0001",
+      "name": "飞剑·煞",
+      "card_ref": "refs/cards/p0/talismans.yaml#F-0001",
+      "segments": [
+        "body-flying-sword",
+        "foot-sha"
+      ],
+      "spirit_cost": 13,
+      "note": "单体穿透 + 落点爆炸；爆炸挖矿/破墙（T4b 用）"
+    },
+    {
+      "id": "F-0002",
+      "name": "毕方火·化·水",
+      "card_ref": "refs/cards/p0/talismans.yaml#F-0002",
+      "segments": [
+        "body-bifang-huo",
+        "foot-hua-water"
+      ],
+      "spirit_cost": 40,
+      "note": "点燃 + 把命中物质转成水（T4b 的组合时刻：把水银/岩转成水再葫芦取水）"
+    },
+    {
+      "id": "F-0003",
+      "name": "鬼火·镇",
+      "card_ref": "refs/cards/p0/talismans.yaml#F-0003",
+      "segments": [
+        "body-gui-huo",
+        "foot-zhen"
+      ],
+      "spirit_cost": 20,
+      "note": "T4b 无敌人，暂作「阴性伤害/定身」的接口验证"
+    },
+    {
+      "id": "F-0004",
+      "name": "土遁·归",
+      "card_ref": "refs/cards/p0/talismans.yaml#F-0004",
+      "segments": [
+        "body-tudun",
+        "foot-hui"
+      ],
+      "spirit_cost": 10,
+      "note": "挖掘 + 句末返还 8 灵（净耗 2），T4b 主要挖掘手段"
+    }
+  ],
+  "v1_deviations": [
+    "归 的 spirit_cost 记为 0（返还 8）：与 S-0002「符脚 +8~+30」的唯一例外，2026-11-16 用户拍板（spec §7.3 #4）。",
+    "T1 spec §5.2：F-0004 的「土遁 10 + 归 0，返还 8」是 net 2 的唯一自洽读法。",
+    "化·金 / 墨弹 / 蒸汽 / 幻符池按层：数据缺口，本表不提供（spec §7.4）。"
+  ]
+}
