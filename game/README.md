@@ -74,7 +74,7 @@ Godot 与 godot-cpp 的大版本必须一致（4.5 ↔ godot-cpp 4.5），否则
 ## 已知限制（T4b 范围）
 
 - 施法命中简化为**即时命中**（不做投射物实体/飞行/穿透）：`spawn_projectile` 的 payload/trigger 在瞄准点立即执行；damage/apply_status 等无敌人系统，no-op。
-- 无神智/入魔/洞天/旱魃/存档；火伤用「7 盏」灰盒占位，盏尽回起点。
+- 无神智/入魔/洞天/旱魃/存档；火伤用「7 盏」灰盒占位，盏尽回起点；**火/燃烧是灰盒规则**：只有油会自燃，煤/硫/竹木的 `flammable/ignition_temperature` 引擎还没消费（M1 反应表实现，见 `docs/tech/sim-fire-heat-design.md`）。
 - 房间按 `tile_size=16` 展开；正式关卡拓扑/拼接（wangi tile + spliced rooms）留到 M1-04。
 - 渲染为 C-SIM 调试色（材质颜色 + 坐标抖动），不是美术；相机视口 480×270 cells（内部 1920×1080、4 倍像素）。
 - 中文 HUD 依赖 `ui_font.tres`（SystemFont，Windows 回退 Microsoft YaHei）；无字体环境会退化为方块。

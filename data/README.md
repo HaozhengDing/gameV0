@@ -40,6 +40,7 @@ data/
 - `consumes`（字符串数组，可选）：本反应实际消耗的物质 id；**缺省时等于 `inputs`**。未列入 `consumes` 的输入只作为条件参与匹配，反应后保留。
 
 - `trigger.type`：`contact` / `heat`（带 `min_temperature`）
+- `temperature` / `ignition_temperature`：2026-11-17 前**未被引擎读取**（sim_core 目前只用 `state/density/color/flammable`）；M1 热/火系统（C-SIM v3）会消费这两个字段，设计见 `docs/tech/sim-fire-heat-design.md`。
 - `result.type`：`explosion` / `heat_cloud` / `purify` / `damage` / `barrier` / `temporary_talisman_slot` / `toxic_smoke` / `burn`
 - `target_tags` 用于实体/物品标签（如 `spirit`、`eldritch`、`paper`），不是物质 id。
 
