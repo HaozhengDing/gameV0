@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-20 | [2026-11-20-03-t4b-playtest-feedback.md](2026-11-20-03-t4b-playtest-feedback.md) | 评审 + 建议 | 详细 | T4b 首次实机试玩反馈：Noita 式重力+浮空移动方案 & 去中二/极简命名与 HUD 方案对比 |
 | 2026-11-20 | [2026-11-20-02-t4b-graybox-polish.md](2026-11-20-02-t4b-graybox-polish.md) | 更新 | 详细 | T4b 灰盒打磨：火焰灰盒补丁（1.5%/tick 蔓延 + F 手动点火）、5 项 bugfix、移动/HUD/准星手感调参 |
 | 2026-11-20 | [2026-11-20-01-handoff-prompt.md](2026-11-20-01-handoff-prompt.md) | 建议 | 摘要 | 交接提示词（2026-11-20）：状态快照、工作规则、四个可交办工作包 |
 | 2026-11-17 | [2026-11-17-01-fire-heat-noita-minecraft.md](2026-11-17-01-fire-heat-noita-minecraft.md) | 建议 | 详细 | 火焰/热：Noita 材料化 vs 我的世界方块老化；借鉴方案与 M1-12 排期（M0 不扩） |
