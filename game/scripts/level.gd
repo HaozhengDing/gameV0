@@ -47,11 +47,19 @@ const OIL_TRENCH_X1 := 494
 # 火墙高 16 cells，半径 3 喷一次只能盖 7 行、无法开出 10 格高的通道，故取 12（见汇报）
 const DOUSE_RADIUS := 12
 
+# 灰盒火焰补丁（docs/tech/sim-fire-heat-design.md §5）：
+# sim_core 仅对油有自燃概率（5%/tick），煤/硫磺/竹木在 C-SIM v2 只有 flammable 标志、点燃概率 0。
+# 灰盒世界层只追踪活跃火种，对相邻非油可燃材质按统一概率点燃（不改 sim_core/data 契约）。
+const FLAMMABLE_IGNITE_CHANCE := 0.015  # 1.5%/tick（1-2%/tick 区间）
+const MAX_TRACKED_FIRES := 512
+const IGNITE_THRESHOLD := 983           # round(0.015 * 65536)
+
 # 组合时刻 / --t4b-smoke / --t4b-shot 用坐标
 const MERCURY_AIM_CELL := Vector2i(304, 276)    # room-01 水银池中心（tile 展开后的池内）
 const FIRE_WALL_AIM_CELL := Vector2i(484, 270)  # 火障东缘方向（喷水瞄准点）
 const DOUSE_CELL := Vector2i(470, 270)          # 喷水站位：火墙西侧 10 格
 const SHOT_PLAYER_CELL := Vector2i(250, 270)    # --t4b-shot：房间 01 中部，朝东
+const SMOKE_BAMBOO_CELL := Vector2i(384, 276)   # --t4b-smoke：room-01 东侧竹木柱（可燃测试用）
 
 # 数据文件（res:// 不能出工程目录，按 T4B.md §2 用 globalize_path 拼 ../data）
 const ROOM01_PATH := "../data/rooms/room-01-silver-pit.json"
@@ -66,10 +74,12 @@ var mat_rock := 1
 var mat_water := 3
 var mat_oil := 4
 var mat_fire := 6
+var _mat_flammable: Array[bool] = []        # 按材质 id 缓存「非油可燃」（煤/硫磺/竹木）
 
 var fire_wall_cells: Array[Vector2i] = []   # 火墙源格（会被持续重燃，直到被水浇灭）
 var _fire_wall_set: Dictionary = {}         # Vector2i -> true，快速判定「是不是火墙源格」
 var _doused: Dictionary = {}                # Vector2i -> true，被喷水浇灭、本局不再重燃
+var _tracked_fires: Dictionary = {}         # Vector2i -> true，灰盒火焰补丁追踪的活跃火格
 
 # ------------------------------------------------------------------ 对外接口
 
@@ -86,6 +96,7 @@ func build() -> bool:
 	fire_wall_cells.clear()
 	_fire_wall_set.clear()
 	_doused.clear()
+	_tracked_fires.clear()
 
 	var t0 := Time.get_ticks_msec()
 	# 1) 全部填 rock，再挖出连通走廊（程序化）、放房间、放火障/出口
@@ -128,6 +139,82 @@ func tick_fire_wall() -> void:
 			continue
 		sim.set_cell(cell.x, cell.y, mat_fire)
 
+## 登记活跃火格（由 executor 点火/爆炸/手动点火/喷油邻火触发）。
+func register_fire_cell(x: int, y: int) -> void:
+	if x < 0 or y < 0 or x >= WORLD_W or y >= WORLD_H:
+		return
+	if _tracked_fires.size() >= MAX_TRACKED_FIRES:
+		return
+	_tracked_fires[Vector2i(x, y)] = true
+
+func active_fire_count() -> int:
+	return _tracked_fires.size()
+
+## 灰盒火焰补丁：追踪活跃火格（含上升 1 格跟随），以统一 1.5%/tick 点燃相邻非油可燃材质（煤/硫磺/竹木）。
+## 仅在 active_rect 内演化（与 sim_core 休眠区语义一致）；返回本 tick 新点燃格数。
+func tick_flammable_spread(active_rect: Rect2i) -> int:
+	if not built or _tracked_fires.is_empty():
+		return 0
+	var tick: int = sim.get_tick()
+	var has_bounds := active_rect.has_area()
+	var mat_cap := _mat_flammable.size()
+	var ignited := 0
+	var next_tracked: Dictionary = {}
+	var keys: Array = _tracked_fires.keys()
+	for raw_cell in keys:
+		var p: Vector2i = raw_cell
+		if has_bounds and not active_rect.has_point(p):
+			if next_tracked.size() < MAX_TRACKED_FIRES:
+				next_tracked[p] = true
+			continue
+		var fp := _follow_fire_cell(p)
+		if fp.x < 0:
+			continue
+		if next_tracked.size() < MAX_TRACKED_FIRES:
+			next_tracked[fp] = true
+		# 检查 4 邻域：跟随邻火（如油燃火锋）并按概率点燃非油可燃材质
+		var nbs: Array[Vector2i] = [
+			Vector2i(fp.x - 1, fp.y),
+			Vector2i(fp.x + 1, fp.y),
+			Vector2i(fp.x, fp.y - 1),
+			Vector2i(fp.x, fp.y + 1),
+		]
+		for nb in nbs:
+			if nb.x < 0 or nb.y < 0 or nb.x >= WORLD_W or nb.y >= WORLD_H:
+				continue
+			var nm: int = sim.get_cell(nb.x, nb.y)
+			if nm == mat_fire:
+				if not _fire_wall_set.has(nb) and next_tracked.size() < MAX_TRACKED_FIRES:
+					next_tracked[nb] = true
+				continue
+			if nm > 0 and nm < mat_cap and _mat_flammable[nm]:
+				if _spread_roll(nb.x, nb.y, tick):
+					sim.set_cell(nb.x, nb.y, mat_fire)
+					ignited += 1
+					if next_tracked.size() < MAX_TRACKED_FIRES:
+						next_tracked[nb] = true
+	_tracked_fires = next_tracked
+	return ignited
+
+func _follow_fire_cell(p: Vector2i) -> Vector2i:
+	if sim.get_cell(p.x, p.y) == mat_fire:
+		return p
+	# 火在 sim_core 中优先向上/左上/右上移动 1 格
+	var ny := p.y - 1
+	if ny >= 0:
+		if sim.get_cell(p.x, ny) == mat_fire:
+			return Vector2i(p.x, ny)
+		if p.x > 0 and sim.get_cell(p.x - 1, ny) == mat_fire:
+			return Vector2i(p.x - 1, ny)
+		if p.x + 1 < WORLD_W and sim.get_cell(p.x + 1, ny) == mat_fire:
+			return Vector2i(p.x + 1, ny)
+	return Vector2i(-1, -1)
+
+func _spread_roll(x: int, y: int, tick: int) -> bool:
+	var h: int = ((x * 73856093) ^ (y * 19349663) ^ (tick * 83492791)) & 0xFFFFFF
+	h = ((h * 2654435761) >> 12) & 0xFFFF
+	return h < IGNITE_THRESHOLD
+
 ## 喷水灭火：对每个水格周围 DOUSE_RADIUS 的格子，火 -> 空；命中火墙源格则标记本局不再重燃。
 ## 返回被熄掉的火格数（HUD 的「灭火 N 格」）。
 func douse_fire_around(water_cells: Array) -> int:
@@ -147,15 +234,16 @@ func douse_fire_around(water_cells: Array) -> int:
 				seen[cell] = true
 				if _fire_wall_set.has(cell):
 					_doused[cell] = true
+				_tracked_fires.erase(cell)
 				var m: int = sim.get_cell(cell.x, cell.y)
 				if m == mat_fire:
 					sim.set_cell(cell.x, cell.y, mat_empty)
 					doused += 1
 	return doused
 
-## 出口 3x3：玩家 cell 落在 (EXIT_CELL ± EXIT_RADIUS) 即通关。
+## 出口区：跨越出口走廊整个高度（y 260..276），玩家沿地板或天花板走到 x >= EXIT_CELL.x - EXIT_RADIUS 均通关。
 func is_at_exit(cell: Vector2i) -> bool:
-	return absi(cell.x - EXIT_CELL.x) <= EXIT_RADIUS and absi(cell.y - EXIT_CELL.y) <= EXIT_RADIUS
+	return cell.x >= EXIT_CELL.x - EXIT_RADIUS and cell.y >= CORRIDOR_TOP and cell.y <= CORRIDOR_TOP + CORRIDOR_HEIGHT
 
 ## 火障附近（含被点燃的油槽）还有几个火格（smoke 用）。
 func count_fire_near_barrier() -> int:
@@ -188,6 +276,12 @@ func _cache_material_ids() -> void:
 	mat_fire = sim.material_id("fire")
 	if mat_rock < 0 or mat_water < 0 or mat_oil < 0 or mat_fire < 0:
 		push_error("T4B level: C-SIM 材质表缺少基础材质（需要 C-SIM v2）")
+	_mat_flammable.clear()
+	var count: int = sim.get_material_count()
+	_mat_flammable.resize(count)
+	for i in range(count):
+		# 油已由 sim_core 以 5%/tick 点燃，这里只标记非油可燃材质（煤/硫磺/竹木）
+		_mat_flammable[i] = (i != mat_oil) and sim.get_material_flammable(i)
 
 func _data_path(rel_path: String) -> String:
 	return ProjectSettings.globalize_path("res://").path_join(rel_path)

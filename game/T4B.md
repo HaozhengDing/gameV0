@@ -1,6 +1,6 @@
 # T4b 灰盒规格（Godot 侧）——矿井 10 分钟可玩一轮
 
-> 状态：**已实现（2026-11-16）**；本文是实现契约，具体参数以代码常量为准（`game/scripts/level.gd` 顶部常量）。依赖 T4a 构建链 + T1 VM（C-VM/C-ACT v0.1 已拍板）+ C-SIM v2。
+> 状态：**已实现（2026-11-16）｜打磨 + 火焰灰盒补丁（2026-11-20）**；本文是实现契约，具体参数以代码常量为准（`game/scripts/level.gd` / `executor.gd` / `player.gd` 顶部常量）。依赖 T4a 构建链 + T1 VM（C-VM/C-ACT v0.1 已拍板）+ C-SIM v2。
 > 本文是 GDScript 世界层（`game/scripts/`）的实现契约；C++ 侧 API 见 `game/gdextension/API.md`。
 
 ## 1. 目标（02 计划 T4b 完成标准）
@@ -34,12 +34,13 @@
 
 | 键 | 作用 |
 |---|---|
-| WASD / 方向键 | 移动（cell 级碰撞：`sim.is_solid(cell)` 为 true 的格不能进入；分轴滑动） |
-| 鼠标 | 瞄准（`get_global_mouse_position() / 4` → cell） |
-| 左键 | 施放当前符组 `vm.cast_group(selected)`，执行返回的 actions |
-| 1 / 2 / 3 / 4 | 切换符组（F-0001 飞剑·煞 / F-0002 毕方火·化·水 / F-0003 鬼火·镇 / F-0004 土遁·归）；HUD 显示当前与灵力 |
-| E | 葫芦吸取：鼠标周围半径 3 的 `water`/`oil` 格 → 存入葫芦（水容量 200、油容量 100） |
-| Q | 葫芦喷出（当前液体；Tab 切换水/油）：沿玩家→鼠标方向铺 10–16 格，每格耗 1 |
+| WASD / 方向键 | 移动（cell 级分轴子步碰撞，64 cells/s；火格不可进入；粉末落体可脱困） |
+| 鼠标 | 瞄准（`get_global_mouse_position() / 4` → cell；HUD 实时显示指向材质与可燃标记） |
+| 左键 | 施放当前符组 `vm.cast_group(selected)`，执行返回的 actions 并显示反馈光圈 |
+| 1 / 2 / 3 / 4 | 切换符组（F-0001 飞剑·煞 / F-0002 毕方火·化·水 / F-0003 鬼火·镇 / F-0004 土遁·归）；HUD 显示当前、灵力消耗与灵力 |
+| E | 葫芦吸取：鼠标周围半径 6 的 `water`/`oil` 格 → 存入葫芦（水容量 200、油容量 100；由初版 3 调至 6 便于吸薄水层） |
+| Q | 葫芦喷出（当前液体；Tab 切换水/油）：自胸口沿玩家→鼠标方向铺 12 格（遇实心墙停止），每格耗 1；仅喷水灭火 |
+| F | 手动点火（灰盒火焰补丁）：点燃鼠标周围半径 3 内可燃物，或空地放半径 1 火种 |
 | R | 重开（重置世界/玩家/葫芦/VM） |
 
 施法反馈：HUD 一行显示 `accepted/reject_reason`（如「灵力不足」「回符中」）；动作执行结果（如爆炸挖开墙）直接体现在世界。
@@ -48,7 +49,7 @@
 
 T4b 只执行这些 op（其余 no-op + 打日志）：
 - `spawn_projectile`：T4b 做**命中判定简化为即时命中**——在瞄准点执行其 `payloads`，若 `trigger` 存在则再执行 `trigger.actions`；`count/damage/speed` 只用于 HUD/视觉，不做投射物实体。
-- `explode`：`sim.dig(aim, radius)`；半径内可燃料子（`sim.get_material_flammable(id)`）点燃。
+- `explode`：`sim.dig(aim, radius)`；挖坑后对半径 `radius + 3` 的坑缘可燃物（`sim.get_material_flammable(id)`）点燃并登记蔓延。
 - `ignite`：瞄准点周围 radius 2 内可燃物 → `sim.set_cell(i,j, fire_id)`。
 - `convert_material`：瞄准点 radius 内，**非静态、非空**的格转为目标材质（液体/粉末；本作 combo 用：水银→水）；静态岩层不动。
 - `dig`：`sim.dig`。
@@ -58,11 +59,11 @@ T4b 只执行这些 op（其余 no-op + 打日志）：
 
 ### 3.2 火光/伤害（灰盒最小规则）
 
-- 火格（`fire`）= 危险：玩家所在 cell 或相邻 1 格有火/油燃时，每 0.5s 掉 1 盏；盏 7 → 0 时**回到起点**并复原盏（世界保留）。
-- 喷水灭火：每次喷水后，喷到的水格周围 **半径 12** 内的火格 → 置空、命中的火墙源格本局不再重燃（记 combo 事件）。半径 12 是 16 格高火墙下的灰盒调参（半径 3 只能开出 7 格缺口，10 格高身体过不去）；使「取水→灭火→通过火障」成为必要路径。
-- 到达出口 → HUD 显示「本轮完成」，可按 R 重开。
+- 火格（`fire`）= 危险：玩家 5×10 身体盒外扩 1 格接触火时，每 0.5s 掉 1 盏并红色闪烁提示；盏 7 → 0 时**回到起点**并复原盏（世界保留）。
+- 喷水灭火：仅在喷水（非喷油）时，喷到的水格周围 **半径 12** 内的火格 → 置空、命中的火墙源格本局不再重燃（记 combo 事件）。半径 12 是 16 格高火墙下的灰盒调参（半径 3 只能开出 7 格缺口，10 格高身体过不去）；使「取水→灭火→通过火障」成为必要路径。
+- 到达出口（跨越出口走廊全高 `y 260..276`、`x >= 939`）→ HUD 显示「本轮完成」，可按 R 重开。
 
-> 灰盒说明（2026-11-17）：火/燃烧是占位规则，不是 M1 的反应表；煤/硫/竹木在灰盒里不会自燃（引擎不读 `ignition_temperature`），只有油会烧。火焰/热系统的 Noita/我的世界参考与 M1 方案见 `docs/tech/sim-fire-heat-design.md`。
+> 灰盒说明（2026-11-20 更新）：火/燃烧仍是灰盒占位，不是 M1 反应表；本次在 `game/scripts/` 补齐两个灰盒补丁（见 `docs/tech/sim-fire-heat-design.md` §5）：① `level.tick_flammable_spread` 追踪活跃火格，按统一 **1.5%/tick** 点燃相邻非油可燃材质（煤/硫磺/竹木，`sim_core` 原生 5%/tick 点燃油不变）；② `F` 键手动点火与 `explode` 坑缘引燃。仍不读 `ignition_temperature`，无烟/蒸汽/黑火药爆炸（留 M1-12）。
 
 ## 4. 组合时刻（验收用）
 
@@ -80,7 +81,8 @@ T4b 只执行这些 op（其余 no-op + 打日志）：
 | `game/scripts/player.gd` | 移动/碰撞/朝向（Node2D；cell 坐标浮点） |
 | `game/scripts/level.gd` | 世界初始化、房间 JSON 读取与放置、走廊/火障/出口、重置 |
 | `game/scripts/executor.gd` | C-ACT 动作执行 + 葫芦吸/喷 + 火伤害/灭火规则 |
-| `game/scripts/hud.gd` | 灵力/盏/葫芦/符组/事件日志/通关提示 |
+| `game/scripts/hud.gd` | 灵力/盏/葫芦/符组/指向材质/事件日志/底部键位提示/通关提示 |
+| `game/scripts/overlay.gd` | 瞄准准星与施法/吸液/喷液/手动点火的短暂视觉反馈 |
 | `game/tests/t4b_smoke.gd` | 可选：独立 SceneTree 自检（或由 main.gd 的 `--t4b-smoke` 承担） |
 | 运行方式 | `godot --path game`；无界面：`godot --headless --path game -- --t4b-smoke`；截图：`godot --path game -- --t4b-shot`（存仓库根 t4b_shot.png） |
 

@@ -23,6 +23,7 @@ const LevelScript := preload("res://scripts/level.gd")
 const PlayerScript := preload("res://scripts/player.gd")
 const ExecutorScript := preload("res://scripts/executor.gd")
 const HudScript := preload("res://scripts/hud.gd")
+const OverlayScript := preload("res://scripts/overlay.gd")
 
 # 场景节点
 var sim: SimWorldNode
@@ -32,11 +33,13 @@ var player
 var camera: Camera2D
 var hud
 var executor
+var overlay
 var exit_marker: ColorRect
 
 # 玩法状态
 var group_ids: Array = []
 var group_names: Array = []
+var group_costs: Array = []
 var selected_group := 0
 var completed := false
 var smoke_mode := false
@@ -47,6 +50,7 @@ var _shot_done := false
 var _accum := 0.0
 var _hud_timer := 0.0
 var _last_view := Vector2i(-999999, -999999)
+var _active_rect := Rect2i()
 
 # ================================================================== 生命周期
 
@@ -75,10 +79,15 @@ func _setup() -> void:
 		return
 	_create_level()
 	_create_player()
+	_create_overlay()
 	_create_vm()
 	_create_hud()
 	_create_executor()
 	_start_round()
+	if smoke_mode or shot_mode:
+		player.input_enabled = false
+		if overlay != null:
+			overlay.show_reticle = false
 	_refresh_hud()
 	_apply_view()
 	_world_ready = true
@@ -109,6 +118,7 @@ func _tick_once() -> void:
 	sim.step_tick()
 	vm.tick_advance()
 	level.tick_fire_wall()
+	level.tick_flammable_spread(_active_rect)
 	if completed:
 		return
 	if executor.tick_hazards(player.cell_pos()):
@@ -121,6 +131,8 @@ func _process(delta: float) -> void:
 	if not _world_ready:
 		return
 	_apply_view()
+	if overlay != null and overlay.show_reticle and DisplayServer.get_name() != HEADLESS_NAME:
+		overlay.set_aim(_aim_cell())
 	_hud_timer += delta
 	if _hud_timer >= HUD_INTERVAL:
 		_hud_timer = 0.0
@@ -132,17 +144,21 @@ func _process(delta: float) -> void:
 			_take_shot()
 
 ## 每帧只渲染视口：view = 玩家 cell − (240,135)，裁到世界内 480x270；
-## sim.update_texture_region(vx,vy,480,270)；sim.position = (vx,vy)*4；活动区外扩 64 cells。
+## 仅当视口移动时更新 active_rect（避免每帧重复 wake 全屏破坏 chunk 休眠）。
 func _apply_view() -> void:
 	if sim == null or not sim.has_world() or player == null:
 		return
 	var pc: Vector2i = player.cell_pos()
 	var vx := clampi(pc.x - VIEW_W / 2, 0, maxi(WORLD_W - VIEW_W, 0))
 	var vy := clampi(pc.y - VIEW_H / 2, 0, maxi(WORLD_H - VIEW_H, 0))
-	sim.set_active_rect(vx - ACTIVE_MARGIN, vy - ACTIVE_MARGIN, VIEW_W + ACTIVE_MARGIN * 2, VIEW_H + ACTIVE_MARGIN * 2)
 	if vx != _last_view.x or vy != _last_view.y:
 		_last_view = Vector2i(vx, vy)
-		sim.wake_rect(vx - ACTIVE_MARGIN, vy - ACTIVE_MARGIN, VIEW_W + ACTIVE_MARGIN * 2, VIEW_H + ACTIVE_MARGIN * 2)
+		var ax := maxi(vx - ACTIVE_MARGIN, 0)
+		var ay := maxi(vy - ACTIVE_MARGIN, 0)
+		var ax1 := mini(vx + VIEW_W + ACTIVE_MARGIN, WORLD_W)
+		var ay1 := mini(vy + VIEW_H + ACTIVE_MARGIN, WORLD_H)
+		_active_rect = Rect2i(ax, ay, ax1 - ax, ay1 - ay)
+		sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
 	if DisplayServer.get_name() == HEADLESS_NAME:
 		return
 	sim.update_texture_region(vx, vy, VIEW_W, VIEW_H)
@@ -173,15 +189,21 @@ func _cards_path() -> String:
 func _create_level() -> void:
 	level = LevelScript.new()
 	level.setup(sim)
-	# 出口区视觉标记（3x3 cells）；HUD 另有「向东到出口」提示
+	# 出口区视觉标记（跨越走廊整高，配「出口」文字标识）；HUD 另有距离提示
 	exit_marker = ColorRect.new()
 	exit_marker.name = "ExitMarker"
-	exit_marker.color = Color(0.22, 0.95, 0.45, 0.45)
-	exit_marker.size = Vector2(float(SCALE * 3), float(SCALE * 3))
+	exit_marker.color = Color(0.22, 0.95, 0.45, 0.48)
+	exit_marker.size = Vector2(float(SCALE * 4), float(SCALE * LevelScript.CORRIDOR_HEIGHT))
 	exit_marker.position = Vector2(
-		float((LevelScript.EXIT_CELL.x - 1) * SCALE),
-		float((LevelScript.EXIT_CELL.y - 1) * SCALE)
+		float((LevelScript.EXIT_CELL.x - LevelScript.EXIT_RADIUS) * SCALE),
+		float(LevelScript.CORRIDOR_TOP * SCALE)
 	)
+	var exit_label := Label.new()
+	exit_label.text = "出口"
+	exit_label.add_theme_font_size_override("font_size", 20)
+	exit_label.add_theme_color_override("font_color", Color(0.45, 1.0, 0.62))
+	exit_label.position = Vector2(-10.0, -28.0)
+	exit_marker.add_child(exit_label)
 	add_child(exit_marker)
 
 func _create_player() -> void:
@@ -194,6 +216,12 @@ func _create_player() -> void:
 	body.size = Vector2(float(5 * SCALE), float(10 * SCALE))
 	body.position = Vector2(float(-2 * SCALE), float(-10 * SCALE))
 	player.add_child(body)
+	var eye := ColorRect.new()
+	eye.name = "Eye"
+	eye.color = Color(0.14, 0.12, 0.10)
+	eye.size = Vector2(float(2 * SCALE), float(2 * SCALE))
+	eye.position = Vector2(float(1 * SCALE), float(-8 * SCALE))
+	player.add_child(eye)
 	add_child(player)
 	player.setup(sim)
 	camera = Camera2D.new()
@@ -205,6 +233,13 @@ func _create_player() -> void:
 	camera.position_smoothing_enabled = false
 	player.add_child(camera)
 
+func _create_overlay() -> void:
+	overlay = OverlayScript.new()
+	overlay.name = "Overlay"
+	overlay.z_index = 5
+	overlay.show_reticle = DisplayServer.get_name() != HEADLESS_NAME
+	add_child(overlay)
+
 func _create_vm() -> void:
 	vm = TalismanVMNode.new()
 	vm.name = "TalismanVM"
@@ -213,11 +248,13 @@ func _create_vm() -> void:
 		push_error("T4B: TalismanVMNode.load_cards 失败：" + _cards_path())
 	group_ids = vm.get_group_ids()
 	group_names.clear()
+	group_costs.clear()
 	var groups: Array = vm.get_groups()
 	for g in groups:
 		if g is Dictionary:
 			var gd: Dictionary = g
 			group_names.append(String(gd.get("name", String(gd.get("id", "")))))
+			group_costs.append(int(gd.get("spirit_cost", 0)))
 
 func _create_hud() -> void:
 	hud = HudScript.new()
@@ -264,9 +301,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_4:
 				_select_group(3)
 			KEY_E:
-				executor.absorb(_aim_cell())
+				var aim_e := _aim_cell()
+				executor.absorb(aim_e)
+				if overlay != null:
+					overlay.add_ring(aim_e, float(ExecutorScript.ABSORB_RADIUS), Color(0.38, 0.82, 1.0, 0.85))
 			KEY_Q:
-				executor.spray(player.cell_pos(), _aim_cell())
+				var aim_q := _aim_cell()
+				var sp: Dictionary = executor.spray(player.cell_pos(), aim_q)
+				if overlay != null and int(sp.get("placed", 0)) > 0:
+					var col := Color(0.35, 0.72, 1.0, 0.9) if String(sp.get("liquid", "water")) == "water" else Color(0.75, 0.52, 0.24, 0.9)
+					overlay.add_line(sp.get("from", player.cell_pos()), sp.get("to", aim_q), col)
+			KEY_F:
+				var aim_f := _aim_cell()
+				var ignited_f: int = executor.manual_ignite(aim_f)
+				if overlay != null and ignited_f > 0:
+					overlay.add_ring(aim_f, float(ExecutorScript.MANUAL_IGNITE_RADIUS), Color(1.0, 0.52, 0.18, 0.9))
 			KEY_TAB:
 				executor.toggle_liquid()
 			KEY_R:
@@ -291,7 +340,25 @@ func _aim_cell() -> Vector2i:
 func _do_cast(aim: Vector2i) -> void:
 	if group_ids.is_empty():
 		return
-	executor.cast(String(group_ids[selected_group]), aim)
+	var gid := String(group_ids[selected_group])
+	var summary: Dictionary = executor.cast(gid, aim)
+	if overlay != null and bool(summary.get("accepted", false)):
+		var r := 4.0
+		var col := Color(0.96, 0.86, 0.45, 0.9)
+		if gid == "F-0001":
+			r = 20.0
+			col = Color(1.0, 0.55, 0.22, 0.85)
+		elif gid == "F-0002":
+			r = 4.0
+			col = Color(0.36, 0.84, 1.0, 0.95)
+		elif gid == "F-0003":
+			r = 5.0
+			col = Color(0.68, 0.52, 0.98, 0.85)
+		elif gid == "F-0004":
+			r = 3.0
+			col = Color(0.88, 0.78, 0.52, 0.9)
+		overlay.add_ring(aim, r, col)
+	_refresh_hud()
 
 func _select_group(index: int) -> void:
 	if group_ids.is_empty():
@@ -308,6 +375,8 @@ func _restart() -> void:
 		push_error("T4B: 重开时 create_world 失败")
 		return
 	_start_round()
+	if overlay != null:
+		overlay.clear_pulses()
 	hud.clear_complete()
 	hud.clear_log()
 	hud.log_event("重开本轮")
@@ -361,23 +430,43 @@ func _refresh_hud() -> void:
 		return
 	var gid := "—"
 	var gname := "—"
+	var gcost := 0
 	if not group_ids.is_empty() and selected_group < group_ids.size():
 		gid = String(group_ids[selected_group])
 		if selected_group < group_names.size():
 			gname = String(group_names[selected_group])
 		else:
 			gname = gid
+		if selected_group < group_costs.size():
+			gcost = int(group_costs[selected_group])
 	var recharge: String = "回符中" if vm.get_is_recharging() else "可施法"
-	var hint: String = "本轮完成（R 重开）" if completed else "向东到出口 x=%d" % LevelScript.EXIT_CELL.x
-	var status: String = ("符组 %d/%d %s[%s]  %s | 灵力 %.0f/%.0f | 盏 %d/%d\n"
-		+ "葫芦 %s %d/%d | 施法：%s | tick %d | %s") % [
-		selected_group + 1, maxi(group_ids.size(), 1), gname, gid, recharge,
+	var dist_x := maxi(LevelScript.EXIT_CELL.x - player.cell_pos().x, 0)
+	var hint: String = "本轮完成（R 重开）" if completed else "向东出口 %d格" % dist_x
+	var mat_tip: String = _cursor_material_text()
+	var status: String = ("符组 %d/%d %s[%s %d灵]  %s | 灵力 %.0f/%.0f | 盏 %d/%d | %s\n"
+		+ "葫芦 %s %d/%d (水%d 油%d) | 指向：%s | 施法：%s | tick %d") % [
+		selected_group + 1, maxi(group_ids.size(), 1), gname, gid, gcost, recharge,
 		vm.get_spirit(), vm.get_spirit_max(),
-		executor.lanterns, LANTERNS_MAX,
+		executor.lanterns, LANTERNS_MAX, hint,
 		_liquid_cn(), executor.gourd_amount(), executor.gourd_cap(),
-		executor.last_cast_status, sim.get_tick(), hint
+		executor.gourd_water, executor.gourd_oil,
+		mat_tip, executor.last_cast_status, sim.get_tick()
 	]
 	hud.update_status(status)
+
+func _cursor_material_text() -> String:
+	if sim == null or not sim.has_world():
+		return "—"
+	var c: Vector2i = LevelScript.MERCURY_AIM_CELL if shot_mode else _aim_cell()
+	var m: int = sim.get_cell(c.x, c.y)
+	if m <= 0:
+		return "空"
+	var disp: String = sim.get_material_display(m)
+	if disp.is_empty():
+		disp = sim.get_material_id_str(m)
+	if sim.get_material_flammable(m):
+		return disp + "(可燃)"
+	return disp
 
 func _liquid_cn() -> String:
 	if executor == null:
@@ -395,7 +484,8 @@ func _run_smoke() -> void:
 		group_ids.size(), sim.get_materials_source(), sim.get_tick()
 	])
 	# 只让火障附近参与模拟（避免 960x540 全图每 tick 扫描）
-	sim.set_active_rect(430, 240, 80, 60)
+	_active_rect = Rect2i(430, 240, 80, 60)
+	sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
 
 	var fail := ""
 	var water_gained := 0
@@ -503,6 +593,53 @@ func _run_smoke() -> void:
 		elif spirit_after3 > spirit_before3 - 19.0:
 			fail = "F-0003 没有扣 20 灵力（%.1f -> %.1f，可能灵力不足 fizzle）" % [spirit_before3, spirit_after3]
 
+	# 6) T4b 打磨回归：地板高度出口 / 喷油不灭火 / 火伤贴脸判定 / 手动点火 + 可燃材质统一蔓延
+	if fail == "":
+		if not level.is_at_exit(Vector2i(LevelScript.EXIT_CELL.x, LevelScript.CORRIDOR_TOP + LevelScript.CORRIDOR_HEIGHT - 1)):
+			fail = "走廊地板高度无法触发出口"
+	if fail == "":
+		# 喷油不得熄灭半径内火格（修复原 spray 误调 douse_fire_around）
+		var fire_mat: int = sim.material_id("fire")
+		var oil_test_fire := Vector2i(250, 268)
+		sim.set_cell(oil_test_fire.x, oil_test_fire.y, fire_mat)
+		executor.gourd_oil = 12
+		executor.current_liquid = "oil"
+		var oil_res: Dictionary = executor.spray(Vector2i(242, 274), Vector2i(254, 270))
+		if int(oil_res.get("doused", 0)) != 0 or sim.get_cell(oil_test_fire.x, oil_test_fire.y) != fire_mat:
+			fail = "喷油错误触发了灭火（doused=%d）" % int(oil_res.get("doused", 0))
+		sim.set_cell(oil_test_fire.x, oil_test_fire.y, 0)
+		executor.current_liquid = "water"
+	if fail == "":
+		# 手动点火 + 统一 1.5%/tick 可燃材质蔓延（竹木）+ 身体边界火伤检测
+		var bamboo_mat: int = sim.material_id("bamboo")
+		var b_aim: Vector2i = LevelScript.SMOKE_BAMBOO_CELL
+		var bamboo_before := _count_material(b_aim, 8, bamboo_mat)
+		var init_lit: int = executor.manual_ignite(b_aim)
+		if init_lit <= 0:
+			fail = "手动点火未点燃竹木"
+		elif not executor.is_near_fire(b_aim - Vector2i(ExecutorScript.MANUAL_IGNITE_RADIUS + ExecutorScript.BODY_HALF_W + 1, 0)):
+			fail = "身体盒外扩 1 格未检测到相邻火焰（火伤贴墙失效）"
+		else:
+			var bamboo_after_init := _count_material(b_aim, 8, bamboo_mat)
+			_active_rect = Rect2i(360, 240, 48, 64)
+			sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
+			_fast_forward(90)
+			var bamboo_after_spread := _count_material(b_aim, 8, bamboo_mat)
+			if bamboo_after_spread >= bamboo_after_init:
+				fail = "可燃材质未发生火焰蔓延（竹木 %d -> %d -> %d）" % [bamboo_before, bamboo_after_init, bamboo_after_spread]
+			else:
+				print("T4B_SMOKE_STEP 灰盒火焰补丁 bamboo %d->%d(手动点火)->%d(蔓延90tick)" % [
+					bamboo_before, bamboo_after_init, bamboo_after_spread
+				])
+	if fail == "":
+		# 爆炸坑缘引燃：F-0001 命中 room-02 硫磺块 -> 挖坑后仍引燃坑缘硫磺
+		var sulfur_aim := Vector2i(632, 228)
+		var r_rim: Dictionary = executor.cast("F-0001", sulfur_aim)
+		if not bool(r_rim.get("accepted", false)) or int(r_rim.get("ignited", 0)) <= 0:
+			fail = "F-0001 爆炸未引燃坑缘硫磺（ignited=%d）" % int(r_rim.get("ignited", 0))
+		else:
+			print("T4B_SMOKE_STEP 爆炸坑缘引燃 sulfur ignited=%d" % int(r_rim.get("ignited", 0)))
+
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)
 		print("T4B_SMOKE_FAIL " + fail)
@@ -519,6 +656,7 @@ func _fast_forward(tick_count: int) -> void:
 		sim.step_tick()
 		vm.tick_advance()
 		level.tick_fire_wall()
+		level.tick_flammable_spread(_active_rect)
 
 func _count_material(center: Vector2i, radius: int, material: int) -> int:
 	if material < 0:

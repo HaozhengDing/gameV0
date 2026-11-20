@@ -1,6 +1,6 @@
 # game/ —— Godot 灰盒（T4a 构建链 + T4b 可玩灰盒）
 
-> 状态：T4a 完成（2026-11-16）｜T4b 灰盒完成（2026-11-16）｜契约：C-SIM v2（`sim_core/include/sim/c_sim.h`）、C-VM/C-ACT v0.1（`docs/tech/talisman-vm-spec.md`）
+> 状态：T4a 完成（2026-11-16）｜T4b 灰盒完成（2026-11-16）｜T4b 打磨 + 火焰灰盒补丁（2026-11-20）｜契约：C-SIM v2（`sim_core/include/sim/c_sim.h`）、C-VM/C-ACT v0.1（`docs/tech/talisman-vm-spec.md`）
 > 计划：`docs/02-m0-plan.md` T4a/T4b｜规格：`game/T4B.md`｜API：`game/gdextension/API.md`
 
 ## 这是什么
@@ -12,9 +12,9 @@
   - `TalismanVMNode`：T3 参考符箓 VM（C-VM/C-ACT）的包装——读 `data/talismans.json`，按符组 `cast_group()` 返回 C-ACT 动作列表与灵力/回符状态。
 - `scripts/`：GDScript 世界层（规格见 `game/T4B.md`）
   - `main.gd`：装配、固定步长 1/60、相机跟随 + 视口渲染、输入、HUD、重开、`--t4b-smoke` / `--t4b-shot`
-  - `level.gd`：960×540 cells 矿井关卡；`data/rooms/` 两个房间按 `tile_size=16` 展开（384×224 cells/间）、走廊、火障 + 油槽、出口
-  - `executor.gd`：C-ACT 子集执行（spawn/explode/ignite/convert/dig/spawn_material…）+ 葫芦吸/喷 + 火伤与灭火
-  - `player.gd`：cell 级碰撞移动；`hud.gd`：灵力/盏/葫芦/符组/事件日志
+  - `level.gd`：960×540 cells 矿井关卡；`data/rooms/` 两个房间按 `tile_size=16` 展开（384×224 cells/间）、走廊、火障 + 油槽、出口、灰盒可燃材质统一蔓延（1.5%/tick）
+  - `executor.gd`：C-ACT 子集执行（spawn/explode/ignite/convert/dig/spawn_material…）+ 葫芦吸/喷 + 手动点火 + 火伤与灭火
+  - `player.gd`：cell 级分轴子步碰撞移动 + 火伤闪烁；`hud.gd`：灵力/盏/葫芦/符组/指向材质/事件日志/键位条；`overlay.gd`：瞄准准星与施法/喷液反馈圈
 - `tests/`：`smoke_sim.gd`（T4a 扩展自检）、`t4b_smoke` 由 main.gd 承担
 
 **桩替换**：Godot 侧只依赖 `SimWorldNode` / `TalismanVMNode` 的方法；换桩或换实现保持同一组方法即可，`scripts/` 不用改。
@@ -55,12 +55,13 @@ Godot 与 godot-cpp 的大版本必须一致（4.5 ↔ godot-cpp 4.5），否则
 
 | 键 | 作用 |
 |---|---|
-| WASD / 方向键 | 移动（cell 级碰撞；火格不可进入） |
-| 鼠标 / 左键 | 瞄准 / 施放当前符组 |
+| WASD / 方向键 | 移动（cell 级分轴子步碰撞；火格不可进入；粉末落体不锁死移动） |
+| 鼠标 / 左键 | 瞄准（HUD 显示指向材质）/ 施放当前符组 |
 | 1 / 2 / 3 / 4 | 符组：F-0001 飞剑·煞 / F-0002 毕方火·化·水 / F-0003 鬼火·镇 / F-0004 土遁·归 |
-| E | 葫芦吸取（瞄准点半径 3 的水/油） |
-| Q | 葫芦喷出（沿玩家→鼠标方向 12 格） |
+| E | 葫芦吸取（瞄准点半径 6 的水/油） |
+| Q | 葫芦喷出（自胸口沿玩家→鼠标方向 12 格，遇实心墙停止；仅喷水灭火） |
 | Tab | 切换葫芦液体（水/油） |
+| F | 手动点火（灰盒演示：点燃瞄准点半径 3 内可燃物或空地放火种） |
 | R | 重开本轮 |
 
 ## 10 分钟可玩循环（T4b 验收）
@@ -74,7 +75,7 @@ Godot 与 godot-cpp 的大版本必须一致（4.5 ↔ godot-cpp 4.5），否则
 ## 已知限制（T4b 范围）
 
 - 施法命中简化为**即时命中**（不做投射物实体/飞行/穿透）：`spawn_projectile` 的 payload/trigger 在瞄准点立即执行；damage/apply_status 等无敌人系统，no-op。
-- 无神智/入魔/洞天/旱魃/存档；火伤用「7 盏」灰盒占位，盏尽回起点；**火/燃烧是灰盒规则**：只有油会自燃，煤/硫/竹木的 `flammable/ignition_temperature` 引擎还没消费（M1 反应表实现，见 `docs/tech/sim-fire-heat-design.md`）。
+- 无神智/入魔/洞天/旱魃/存档；火伤用「7 盏」灰盒占位，盏尽回起点；**火/燃烧是灰盒规则**：`sim_core` 仅原生点燃油（5%/tick），T4b 灰盒世界层额外对煤/硫/竹木（`flammable=true`）提供统一 1.5%/tick 蔓延 + `F` 手动点火演示（不消费 `ignition_temperature`，无烟/蒸汽/黑火药反应；正式反应表留 M1-12，见 `docs/tech/sim-fire-heat-design.md`）。
 - 房间按 `tile_size=16` 展开；正式关卡拓扑/拼接（wangi tile + spliced rooms）留到 M1-04。
 - 渲染为 C-SIM 调试色（材质颜色 + 坐标抖动），不是美术；相机视口 480×270 cells（内部 1920×1080、4 倍像素）。
 - 中文 HUD 依赖 `ui_font.tres`（SystemFont，Windows 回退 Microsoft YaHei）；无字体环境会退化为方块。

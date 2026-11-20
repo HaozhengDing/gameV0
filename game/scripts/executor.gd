@@ -4,13 +4,18 @@ extends RefCounted
 ## 其余 op 一律 no-op + print（T4B.md §3.1）。
 
 # 葫芦 / 盏 / 灰盒规则常量
-const ABSORB_RADIUS := 3        # E 吸取半径（cells）
+const ABSORB_RADIUS := 6        # E 吸取半径（cells；由 3 调至 6，便于吸取铺开的水面薄层）
 const SPRAY_LEN := 12           # Q 喷出长度（T4B.md 给 10-16，灰盒取固定 12）
+const SPRAY_ORIGIN_OFFSET_Y := 4 # 喷水起点上移至胸口，避免站地板时撞地并覆盖整面火墙
 const WATER_CAP := 200
 const OIL_CAP := 100
 const LANTERNS_MAX := 7
 const HAZARD_INTERVAL_TICKS := 30   # 每 0.5s（60 tick/s）掉 1 盏
+const BODY_HALF_W := 2              # 与 player.gd 身体碰撞盒一致（x ±2, y -9..0）
+const BODY_HEIGHT := 10
 const IGNITE_RADIUS := 2            # ignite op 固定半径（T4B.md §3.1）
+const EXPLODE_IGNITE_MARGIN := 3    # explode 挖坑后额外引燃坑缘可燃物
+const MANUAL_IGNITE_RADIUS := 3     # F 手动点火半径（灰盒火焰补丁）
 const MAX_ACTION_DEPTH := 4
 
 var sim: SimWorldNode
@@ -25,7 +30,7 @@ var gourd_oil := 0
 var current_liquid := "water"
 var lanterns := LANTERNS_MAX
 var damage_ticks := 0
-var last_cast_status := ""
+var last_cast_status := "待命"
 
 # 组合统计（HUD/smoke 用）
 var combo_water_converted := 0
@@ -60,7 +65,7 @@ func reset_round() -> void:
 	current_liquid = "water"
 	lanterns = LANTERNS_MAX
 	damage_ticks = 0
-	last_cast_status = ""
+	last_cast_status = "待命"
 	combo_water_converted = 0
 	combo_fire_doused = 0
 
@@ -104,15 +109,16 @@ func absorb(center: Vector2i) -> int:
 		_log("附近没有水/油")
 	return got_water + got_oil
 
-## Q：从玩家 cell 沿 玩家->鼠标 方向铺 10-16 格（灰盒固定 12 格），每格耗 1；
-## 铺完交给 level.douse_fire_around() 灭火（半径见 level.gd DOUSE_RADIUS，视觉尺度放大后为 12）。
+## Q：从玩家胸口沿 玩家->鼠标 方向铺 10-16 格（灰盒固定 12 格，遇实心墙停止），每格耗 1；
+## 仅喷水时交给 level.douse_fire_around() 灭火（喷油不灭火，反而可借邻火助燃）。
 func spray(player_cell: Vector2i, aim_cell: Vector2i) -> Dictionary:
-	var out := {"placed": 0, "doused": 0}
+	var origin_cell := Vector2i(player_cell.x, maxi(player_cell.y - SPRAY_ORIGIN_OFFSET_Y, 0))
+	var out := {"placed": 0, "doused": 0, "from": origin_cell, "to": origin_cell, "liquid": current_liquid}
 	var amount := gourd_amount()
 	if amount <= 0:
 		_log("葫芦里没有%s（Tab 切换水/油）" % _liquid_cn())
 		return out
-	var dir := Vector2(float(aim_cell.x - player_cell.x), float(aim_cell.y - player_cell.y))
+	var dir := Vector2(float(aim_cell.x - origin_cell.x), float(aim_cell.y - origin_cell.y))
 	if dir.length() < 0.01:
 		dir = _player_facing()
 	dir = dir.normalized()
@@ -120,15 +126,16 @@ func spray(player_cell: Vector2i, aim_cell: Vector2i) -> Dictionary:
 	var length := mini(SPRAY_LEN, amount)
 	var cells: Array = []
 	var placed := 0
+	var last_cell := origin_cell
 	for i in range(1, length + 1):
-		var p: Vector2 = Vector2(player_cell) + dir * float(i)
+		var p: Vector2 = Vector2(origin_cell) + dir * float(i)
 		var c := Vector2i(roundi(p.x), roundi(p.y))
 		if c.x < 0 or c.y < 0 or c.x >= sim.get_world_width() or c.y >= sim.get_world_height():
-			continue
+			break
 		if cells.has(c):
 			continue
 		if sim.is_solid(c.x, c.y):
-			continue
+			break
 		var m: int = sim.get_cell(c.x, c.y)
 		if m != liquid_id:
 			sim.set_cell(c.x, c.y, liquid_id)
@@ -138,15 +145,68 @@ func spray(player_cell: Vector2i, aim_cell: Vector2i) -> Dictionary:
 			else:
 				gourd_oil -= 1
 		cells.append(c)
+		last_cell = c
 	out["placed"] = placed
+	out["to"] = last_cell
 	_log("喷%s %d 格" % [_liquid_cn(), placed])
 	if not cells.is_empty():
-		var doused: int = level.douse_fire_around(cells)
-		if doused > 0:
-			combo_fire_doused += doused
-			out["doused"] = doused
-			_log("灭火 %d 格" % doused)
+		if current_liquid == "water":
+			var doused: int = level.douse_fire_around(cells)
+			if doused > 0:
+				combo_fire_doused += doused
+				out["doused"] = doused
+				_log("灭火 %d 格" % doused)
+		else:
+			_track_adjacent_fire(cells)
 	return out
+
+## 喷油时若油线接触既有火焰，登记该火格，使油引信燃到煤/硫/竹木时灰盒补丁能继续蔓延。
+func _track_adjacent_fire(cells: Array) -> void:
+	if level == null:
+		return
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	for raw_c in cells:
+		var c: Vector2i = raw_c
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var nx := c.x + dx
+				var ny := c.y + dy
+				if nx < 0 or ny < 0 or nx >= w or ny >= h:
+					continue
+				if sim.get_cell(nx, ny) == mat_fire:
+					level.register_fire_cell(nx, ny)
+
+## F：手动点火（灰盒火焰补丁 ②，docs/tech/sim-fire-heat-design.md §5）：
+## 优先点燃瞄准点周围可燃物（油/煤/硫磺/竹木）；若无直接可燃物则在空地放下小火种（半径 1）。
+func manual_ignite(aim: Vector2i) -> int:
+	if sim == null or not sim.has_world():
+		return 0
+	var summary := {"ignited": 0}
+	_ignite_around(aim, MANUAL_IGNITE_RADIUS, summary)
+	var count: int = int(summary["ignited"])
+	if count == 0:
+		var w := sim.get_world_width()
+		var h := sim.get_world_height()
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				if dx * dx + dy * dy > 1:
+					continue
+				var x := aim.x + dx
+				var y := aim.y + dy
+				if x < 0 or y < 0 or x >= w or y >= h:
+					continue
+				if sim.get_cell(x, y) == mat_empty:
+					sim.set_cell(x, y, mat_fire)
+					if level != null:
+						level.register_fire_cell(x, y)
+					count += 1
+	if count > 0:
+		sim.wake_rect(aim.x - 4, aim.y - 4, 9, 9)
+		_log("手动点火 %d 格" % count)
+	else:
+		_log("此处无法点火")
+	return count
 
 func _liquid_cn() -> String:
 	return "水" if current_liquid == "water" else "油"
@@ -159,10 +219,10 @@ func _player_facing() -> Vector2:
 
 # ------------------------------------------------------------------ 火伤害（§3.2）
 
-## 每 tick 调用：玩家 cell 或相邻 1 格有火 -> 每 30 tick（0.5s）掉 1 盏。
+## 每 tick 调用：玩家身体盒（5x10）或其外扩 1 格边界接触火 -> 每 30 tick（0.5s）掉 1 盏。
 ## 返回 true 表示盏尽（main.gd 负责把玩家送回起点并复原盏）。
 func tick_hazards(player_cell: Vector2i) -> bool:
-	if not _near_fire(player_cell):
+	if not is_near_fire(player_cell):
 		damage_ticks = 0
 		return false
 	damage_ticks += 1
@@ -170,16 +230,26 @@ func tick_hazards(player_cell: Vector2i) -> bool:
 		return false
 	damage_ticks = 0
 	lanterns -= 1
+	if player != null and player.has_method("trigger_hurt_flash"):
+		player.trigger_hurt_flash()
 	_log("火伤 −1 盏（余 %d/%d）" % [lanterns, LANTERNS_MAX])
 	if lanterns <= 0:
 		lanterns = LANTERNS_MAX
 		return true
 	return false
 
-func _near_fire(center: Vector2i) -> bool:
-	for dy in range(-1, 2):
-		for dx in range(-1, 2):
-			if sim.get_cell(center.x + dx, center.y + dy) == mat_fire:
+func is_near_fire(center: Vector2i) -> bool:
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	for dy in range(-BODY_HEIGHT, 2):
+		var y := center.y + dy
+		if y < 0 or y >= h:
+			continue
+		for dx in range(-BODY_HALF_W - 1, BODY_HALF_W + 2):
+			var x := center.x + dx
+			if x < 0 or x >= w:
+				continue
+			if sim.get_cell(x, y) == mat_fire:
 				return true
 	return false
 
@@ -221,9 +291,18 @@ func cast(group_id: String, aim: Vector2i) -> Dictionary:
 			var action_dict: Dictionary = action
 			_execute_action(action_dict, aim, summary, 0)
 	var converted_water: int = int(summary["converted_to_water"])
+	var ignited: int = int(summary["ignited"])
+	var dug: int = int(summary["dug"])
+	var noops: Array = summary["noop"]
+	if ignited > 0:
+		_log("点燃 %d 格" % ignited)
+	if dug > 0:
+		_log("挖掘 %d 格" % dug)
 	if converted_water > 0:
 		combo_water_converted += converted_water
 		_log("化水成功 %d 格" % converted_water)
+	if converted_water == 0 and ignited == 0 and dug == 0 and int(summary["spawned"]) == 0 and not noops.is_empty():
+		_log("施放 %s（灰盒无敌人，仅验证接口）" % group_id)
 	last_cast_status = "施放 %s（灵力 %.0f/%.0f）" % [group_id, vm.get_spirit(), vm.get_spirit_max()]
 	return summary
 
@@ -262,7 +341,8 @@ func _execute_action(action: Dictionary, aim: Vector2i, summary: Dictionary, dep
 		"explode":
 			var radius: int = int(action.get("radius", 20))
 			summary["dug"] = int(summary["dug"]) + sim.dig(aim.x, aim.y, radius)
-			_ignite_around(aim, radius, summary)
+			# 挖坑后可燃固体/粉末已被清出半径内，外扩 EXPLODE_IGNITE_MARGIN 以点燃坑缘煤/硫/竹木
+			_ignite_around(aim, radius + EXPLODE_IGNITE_MARGIN, summary)
 			return
 		"ignite":
 			_ignite_around(aim, IGNITE_RADIUS, summary)
@@ -297,24 +377,30 @@ func _execute_action(action: Dictionary, aim: Vector2i, summary: Dictionary, dep
 
 func _ignite_around(center: Vector2i, radius: int, summary: Dictionary) -> void:
 	var r := maxi(radius, 0)
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
 	for dy in range(-r, r + 1):
 		for dx in range(-r, r + 1):
 			if dx * dx + dy * dy > r * r:
 				continue
 			var x := center.x + dx
 			var y := center.y + dy
+			if x < 0 or y < 0 or x >= w or y >= h:
+				continue
 			var m: int = sim.get_cell(x, y)
 			if m == mat_empty:
 				continue
 			if sim.get_material_flammable(m):
 				sim.set_cell(x, y, mat_fire)
+				if level != null:
+					level.register_fire_cell(x, y)
 				summary["ignited"] = int(summary["ignited"]) + 1
 
 ## convert_material：瞄准点 radius 内「非静态、非空」的格转为目标材质（静态岩层不动）。
 func _convert_around(center: Vector2i, radius: int, to_name: String, summary: Dictionary) -> void:
 	var target: int = sim.material_id(to_name)
 	if target < 0:
-		_noop("convert_material(to=%s 不在 C-SIM v1)" % to_name, summary)
+		_noop("convert_material(to=%s 不在 C-SIM v2)" % to_name, summary)
 		return
 	var r := maxi(radius, 0)
 	var converted := 0
@@ -337,11 +423,11 @@ func _convert_around(center: Vector2i, radius: int, to_name: String, summary: Di
 		if target == mat_water:
 			summary["converted_to_water"] = int(summary["converted_to_water"]) + converted
 
-## spawn_material：形状 pool/solid 简化为圆形填充；只接受 C-SIM v1 有的材质。
+## spawn_material：形状 pool/solid 简化为圆形填充；只接受 C-SIM v2 有的材质。
 func _spawn_material_around(center: Vector2i, radius: int, mat_name: String, summary: Dictionary) -> void:
 	var target: int = sim.material_id(mat_name)
 	if target < 0:
-		_noop("spawn_material(%s 不在 C-SIM v1)" % mat_name, summary)
+		_noop("spawn_material(%s 不在 C-SIM v2)" % mat_name, summary)
 		return
 	var r := maxi(radius, 1)
 	var spawned := 0
