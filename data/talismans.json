@@ -1,8 +1,8 @@
 {
   "schema": "gamev0.talismans/v0.1",
   "version": "0.1",
-  "updated": "2026-11-16",
-  "description": "正式符卡数据（T4b 起符箓 VM 的输入来源）：符头 / 符胆 / 符脚 / 幻符 + P0 符组。数值来自 docs/design §3.3、refs/cards/p0/talismans.yaml 与 S-0002；与 tests/vm_cases/cards.yaml 的重叠项由 tools/validate_data.py 交叉校验。",
+  "updated": "2026-11-20",
+  "description": "正式符卡数据（T4b 起符箓 VM 的输入来源）：符头 / 符胆 / 符脚 / 幻符 + P0 符组。数值来自 docs/design §3.3、refs/cards/p0/talismans.yaml 与 S-0002；命名遵循 2026-11-20 约定：保留明确道教符语（如急急如律令/天罡/敕/奉/五雷），其余取克制单字/直白功能词，符组不另起合体名。",
   "wand_defaults": {
     "spirit": 80,
     "spirit_max": 80,
@@ -52,7 +52,7 @@
       },
       {
         "id": "head-fenshen",
-        "name": "分身",
+        "name": "分",
         "spirit_cost": 5,
         "effect": {
           "projectile_mult": 2
@@ -63,7 +63,7 @@
     "bodies": [
       {
         "id": "body-flying-sword",
-        "name": "飞剑",
+        "name": "斩",
         "spirit_cost": 5,
         "element": "金",
         "damage": 8,
@@ -72,7 +72,7 @@
       },
       {
         "id": "body-bifang-huo",
-        "name": "毕方火",
+        "name": "火",
         "spirit_cost": 10,
         "element": "火",
         "damage": 10,
@@ -88,7 +88,7 @@
       },
       {
         "id": "body-gui-huo",
-        "name": "鬼火",
+        "name": "阴",
         "spirit_cost": 8,
         "element": "阴",
         "damage": 0,
@@ -102,7 +102,7 @@
       },
       {
         "id": "body-tudun",
-        "name": "土遁",
+        "name": "掘",
         "spirit_cost": 10,
         "element": "土",
         "damage": 0,
@@ -115,7 +115,7 @@
       },
       {
         "id": "body-tengsheng",
-        "name": "藤生",
+        "name": "生",
         "spirit_cost": 12,
         "element": "木",
         "damage": 0,
@@ -131,7 +131,7 @@
       },
       {
         "id": "body-forbidden-wulei",
-        "name": "禁符·五雷",
+        "name": "五雷",
         "spirit_cost": 40,
         "element": "雷",
         "damage": 60,
@@ -143,7 +143,7 @@
     "feet": [
       {
         "id": "foot-sha",
-        "name": "煞",
+        "name": "爆",
         "spirit_cost": 8,
         "action": {
           "op": "explode",
@@ -164,7 +164,7 @@
       },
       {
         "id": "foot-shi",
-        "name": "噬",
+        "name": "吸",
         "spirit_cost": 12,
         "action": {
           "op": "drain_life",
@@ -173,7 +173,7 @@
       },
       {
         "id": "foot-hua-water",
-        "name": "化·水",
+        "name": "化水",
         "spirit_cost": 30,
         "action": {
           "op": "convert_material",
@@ -204,7 +204,7 @@
   "phantom_pool": [
     {
       "id": "phantom-001",
-      "name": "幻符·阴噬（占位）",
+      "name": "蚀",
       "effect": {
         "op": "damage",
         "amount": 6,
@@ -213,7 +213,7 @@
     },
     {
       "id": "phantom-002",
-      "name": "幻符·阴气涌（占位）",
+      "name": "阴涌",
       "effect": {
         "op": "spawn_material",
         "material": "yin_qi",
@@ -227,7 +227,7 @@
   "groups": [
     {
       "id": "F-0001",
-      "name": "飞剑·煞",
+      "name": "斩 + 爆",
       "card_ref": "refs/cards/p0/talismans.yaml#F-0001",
       "segments": [
         "body-flying-sword",
@@ -238,7 +238,7 @@
     },
     {
       "id": "F-0002",
-      "name": "毕方火·化·水",
+      "name": "火 + 化水",
       "card_ref": "refs/cards/p0/talismans.yaml#F-0002",
       "segments": [
         "body-bifang-huo",
@@ -249,7 +249,7 @@
     },
     {
       "id": "F-0003",
-      "name": "鬼火·镇",
+      "name": "阴 + 镇",
       "card_ref": "refs/cards/p0/talismans.yaml#F-0003",
       "segments": [
         "body-gui-huo",
@@ -260,7 +260,7 @@
     },
     {
       "id": "F-0004",
-      "name": "土遁·归",
+      "name": "掘 + 归",
       "card_ref": "refs/cards/p0/talismans.yaml#F-0004",
       "segments": [
         "body-tudun",
@@ -273,6 +273,7 @@
   "v1_deviations": [
     "归 的 spirit_cost 记为 0（返还 8）：与 S-0002「符脚 +8~+30」的唯一例外，2026-11-16 用户拍板（spec §7.3 #4）。",
     "T1 spec §5.2：F-0004 的「土遁 10 + 归 0，返还 8」是 net 2 的唯一自洽读法。",
-    "化·金 / 墨弹 / 蒸汽 / 幻符池按层：数据缺口，本表不提供（spec §7.4）。"
+    "化·金 / 墨弹 / 蒸汽 / 幻符池按层：数据缺口，本表不提供（spec §7.4）。",
+    "2026-11-20 用户试玩后拍板精简命名：保留明确道教符语（急急如律令/天罡/敕·触/奉·时/五雷/镇/归），其余单卡改克制单字或直白功能词（飞剑→斩、毕方火→火、鬼火→阴、土遁→掘、藤生→生、煞→爆、噬→吸、化·水→化水、分身→分），符组不另起合体名，直接按组成显示（如 斩 + 爆）。原 id 与数值全部不变；复议条件：M1 外部试玩反馈辨识度不足时微调。"
   ]
 }

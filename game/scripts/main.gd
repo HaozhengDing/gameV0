@@ -14,7 +14,7 @@ const SEED := 20261116
 const FIXED_DT := 1.0 / 60.0
 const LANTERNS_MAX := 7
 const ACTIVE_MARGIN := 64       # 活动区 = 视口外扩 64 cells（T4B.md §2）
-const HUD_INTERVAL := 0.1
+const HUD_INTERVAL := 0.05
 const HEADLESS_NAME := "headless"
 const SHOT_WAIT := 0.6          # --t4b-shot：先跑 ~0.6s 让 sim/纹理就绪再截图
 const SHOT_FILE := "../t4b_shot.png"
@@ -82,10 +82,12 @@ func _setup() -> void:
 	_create_overlay()
 	_create_vm()
 	_create_hud()
+	hud.set_slots(group_names, group_costs)
 	_create_executor()
 	_start_round()
 	if smoke_mode or shot_mode:
 		player.input_enabled = false
+		player.physics_enabled = false
 		if overlay != null:
 			overlay.show_reticle = false
 	_refresh_hud()
@@ -123,7 +125,8 @@ func _tick_once() -> void:
 		return
 	if executor.tick_hazards(player.cell_pos()):
 		player.set_cell_pos(LevelScript.START_CELL)
-		hud.log_event("盏尽，回到起点")
+		player.reset_motion()
+		hud.log_event("回到起点")
 		_refresh_hud()
 	_check_exit_now()
 
@@ -222,6 +225,13 @@ func _create_player() -> void:
 	eye.size = Vector2(float(2 * SCALE), float(2 * SCALE))
 	eye.position = Vector2(float(1 * SCALE), float(-8 * SCALE))
 	player.add_child(eye)
+	var jet := ColorRect.new()
+	jet.name = "Jet"
+	jet.color = Color(0.98, 0.86, 0.42, 0.85)
+	jet.size = Vector2(float(3 * SCALE), float(3 * SCALE))
+	jet.position = Vector2(float(-1 * SCALE), 0.0)
+	jet.visible = false
+	player.add_child(jet)
 	add_child(player)
 	player.setup(sim)
 	camera = Camera2D.new()
@@ -272,6 +282,7 @@ func _start_round() -> void:
 		push_error("T4B: level.build 失败")
 	player.setup(sim)
 	player.set_cell_pos(LevelScript.START_CELL)
+	player.reset_motion()
 	executor.reset_round()
 	vm.reset()
 	_last_view = Vector2i(-999999, -999999)
@@ -364,7 +375,6 @@ func _select_group(index: int) -> void:
 	if group_ids.is_empty():
 		return
 	selected_group = wrapi(index, 0, group_ids.size())
-	hud.log_event("切换符组 %d：%s" % [selected_group + 1, String(group_names[selected_group])])
 
 # ================================================================== 重开
 
@@ -426,33 +436,27 @@ func _check_exit_now() -> bool:
 	return false
 
 func _refresh_hud() -> void:
-	if hud == null or vm == null or executor == null:
+	if hud == null or vm == null or executor == null or player == null:
 		return
-	var gid := "—"
-	var gname := "—"
-	var gcost := 0
-	if not group_ids.is_empty() and selected_group < group_ids.size():
-		gid = String(group_ids[selected_group])
-		if selected_group < group_names.size():
-			gname = String(group_names[selected_group])
-		else:
-			gname = gid
-		if selected_group < group_costs.size():
-			gcost = int(group_costs[selected_group])
-	var recharge: String = "回符中" if vm.get_is_recharging() else "可施法"
 	var dist_x := maxi(LevelScript.EXIT_CELL.x - player.cell_pos().x, 0)
-	var hint: String = "本轮完成（R 重开）" if completed else "向东出口 %d格" % dist_x
-	var mat_tip: String = _cursor_material_text()
-	var status: String = ("符组 %d/%d %s[%s %d灵]  %s | 灵力 %.0f/%.0f | 盏 %d/%d | %s\n"
-		+ "葫芦 %s %d/%d (水%d 油%d) | 指向：%s | 施法：%s | tick %d") % [
-		selected_group + 1, maxi(group_ids.size(), 1), gname, gid, gcost, recharge,
-		vm.get_spirit(), vm.get_spirit_max(),
-		executor.lanterns, LANTERNS_MAX, hint,
-		_liquid_cn(), executor.gourd_amount(), executor.gourd_cap(),
-		executor.gourd_water, executor.gourd_oil,
-		mat_tip, executor.last_cast_status, sim.get_tick()
-	]
-	hud.update_status(status)
+	var hint: String = "本轮完成 · R 重开" if completed else "出口 → %d" % dist_x
+	hud.update_state({
+		"hp": executor.lanterns,
+		"hp_max": LANTERNS_MAX,
+		"mana": vm.get_spirit(),
+		"mana_max": vm.get_spirit_max(),
+		"recharging": vm.get_is_recharging(),
+		"levitate": player.levitate,
+		"levitate_max": PlayerScript.LEVITATE_MAX,
+		"water": executor.gourd_water,
+		"water_cap": ExecutorScript.WATER_CAP,
+		"oil": executor.gourd_oil,
+		"oil_cap": ExecutorScript.OIL_CAP,
+		"liquid": executor.current_liquid,
+		"selected": selected_group,
+		"cursor_mat": _cursor_material_text(),
+		"exit_hint": hint,
+	})
 
 func _cursor_material_text() -> String:
 	if sim == null or not sim.has_world():
@@ -465,7 +469,7 @@ func _cursor_material_text() -> String:
 	if disp.is_empty():
 		disp = sim.get_material_id_str(m)
 	if sim.get_material_flammable(m):
-		return disp + "(可燃)"
+		return disp + " · 可燃"
 	return disp
 
 func _liquid_cn() -> String:
@@ -639,6 +643,40 @@ func _run_smoke() -> void:
 			fail = "F-0001 爆炸未引燃坑缘硫磺（ignited=%d）" % int(r_rim.get("ignited", 0))
 		else:
 			print("T4B_SMOKE_STEP 爆炸坑缘引燃 sulfur ignited=%d" % int(r_rim.get("ignited", 0)))
+
+	# 7) 角色物理移动回归：重力下落 / 浮空上升并消耗浮空条 / 落地快充 / 碎屑迈步
+	if fail == "":
+		player.set_cell_pos(Vector2i(250, 220))
+		player.reset_motion()
+		var y0: float = player.position.y
+		for i in range(25):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		var y_fall: float = player.position.y
+		if y_fall <= y0 + 20.0:
+			fail = "重力下落未生效（y %.1f -> %.1f）" % [y0, y_fall]
+		else:
+			for i in range(30):
+				player.step_physics(FIXED_DT, 0.0, true, false)
+			var y_hover: float = player.position.y
+			var lev_after: float = player.levitate
+			if y_hover >= y_fall - 10.0:
+				fail = "浮空推力未上升（y %.1f -> %.1f）" % [y_fall, y_hover]
+			elif lev_after >= PlayerScript.LEVITATE_MAX - 5.0:
+				fail = "浮空未消耗浮空条（lev=%.1f）" % lev_after
+			else:
+				# 放到走廊地板验证接地与浮空条回充
+				player.set_cell_pos(Vector2i(16, 275))
+				player.velocity = Vector2.ZERO
+				for i in range(45):
+					player.step_physics(FIXED_DT, 0.0, false, false)
+				if not player.on_ground:
+					fail = "走廊地板未判定接地"
+				elif player.levitate < PlayerScript.LEVITATE_MAX - 1.0:
+					fail = "落地未回满浮空条（lev=%.1f）" % player.levitate
+				else:
+					print("T4B_SMOKE_STEP 角色物理 fall=%.1f->%.1f hover->%.1f lev=%.0f->%.0f" % [
+						y0, y_fall, y_hover, lev_after, player.levitate
+					])
 
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)

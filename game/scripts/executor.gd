@@ -79,7 +79,7 @@ func gourd_cap() -> int:
 
 func toggle_liquid() -> void:
 	current_liquid = "oil" if current_liquid == "water" else "water"
-	_log("切换液体：%s（%d/%d）" % [_liquid_cn(), gourd_amount(), gourd_cap()])
+	_log("切至%s %d/%d" % [_liquid_cn(), gourd_amount(), gourd_cap()])
 
 ## E：吸取鼠标周围半径 3 的 water / oil，分别存进葫芦（水 200、油 100）。
 func absorb(center: Vector2i) -> int:
@@ -232,7 +232,7 @@ func tick_hazards(player_cell: Vector2i) -> bool:
 	lanterns -= 1
 	if player != null and player.has_method("trigger_hurt_flash"):
 		player.trigger_hurt_flash()
-	_log("火伤 −1 盏（余 %d/%d）" % [lanterns, LANTERNS_MAX])
+	_log("火伤 -1（%d/%d）" % [lanterns, LANTERNS_MAX])
 	if lanterns <= 0:
 		lanterns = LANTERNS_MAX
 		return true
@@ -276,12 +276,13 @@ func cast(group_id: String, aim: Vector2i) -> Dictionary:
 	var reason: String = String(result.get("reject_reason", ""))
 	summary["reject_reason"] = reason
 	if not accepted:
-		last_cast_status = "施法失败：%s" % _reason_cn(reason)
-		_log(last_cast_status)
+		last_cast_status = _reason_cn(reason)
+		if reason != "recharging":
+			_log(last_cast_status)
 		return summary
 	var events: Array = result.get("events", [])
 	if events.has("fizzle_no_spirit"):
-		last_cast_status = "灵力不足（本句不念）"
+		last_cast_status = "法力不足"
 		_log(last_cast_status)
 		return summary
 	var actions: Array = result.get("actions", [])
@@ -295,27 +296,27 @@ func cast(group_id: String, aim: Vector2i) -> Dictionary:
 	var dug: int = int(summary["dug"])
 	var noops: Array = summary["noop"]
 	if ignited > 0:
-		_log("点燃 %d 格" % ignited)
+		_log("点燃 %d" % ignited)
 	if dug > 0:
-		_log("挖掘 %d 格" % dug)
+		_log("挖掘 %d" % dug)
 	if converted_water > 0:
 		combo_water_converted += converted_water
-		_log("化水成功 %d 格" % converted_water)
+		_log("化水成功 %d" % converted_water)
 	if converted_water == 0 and ignited == 0 and dug == 0 and int(summary["spawned"]) == 0 and not noops.is_empty():
-		_log("施放 %s（灰盒无敌人，仅验证接口）" % group_id)
-	last_cast_status = "施放 %s（灵力 %.0f/%.0f）" % [group_id, vm.get_spirit(), vm.get_spirit_max()]
+		_log("无敌人目标")
+	last_cast_status = "ok"
 	return summary
 
 func _reason_cn(reason: String) -> String:
 	match reason:
 		"recharging":
-			return "回符中"
+			return "冷却中"
 		"empty_deck":
-			return "无牌可念"
+			return "无符"
 		"no_cards":
 			return "符卡未加载"
 		"unknown_group":
-			return "未知符组"
+			return "未知符槽"
 		_:
 			return reason
 
