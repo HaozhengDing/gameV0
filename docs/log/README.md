@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-20 | [2026-11-20-01-handoff-prompt.md](2026-11-20-01-handoff-prompt.md) | 建议 | 摘要 | 交接提示词（2026-11-20）：状态快照、工作规则、四个可交办工作包 |
 | 2026-11-17 | [2026-11-17-01-fire-heat-noita-minecraft.md](2026-11-17-01-fire-heat-noita-minecraft.md) | 建议 | 详细 | 火焰/热：Noita 材料化 vs 我的世界方块老化；借鉴方案与 M1-12 排期（M0 不扩） |
 | 2026-11-16 | [2026-11-16-04-t4b-graybox.md](2026-11-16-04-t4b-graybox.md) | 更新 | 详细 | T4b 可玩灰盒：C-SIM v2、正式符卡数据、VM 接入；t4b-smoke 通过（化水→取水→灭火→通关） |
 | 2026-11-16 | [2026-11-16-03-t4a-godot-gdextension.md](2026-11-16-03-t4a-godot-gdextension.md) | 更新 | 详细 | T4a：Godot 4.5 + GDExtension 构建链跑通（真 sim_core 接入），一键构建 + headless 自检通过 |
