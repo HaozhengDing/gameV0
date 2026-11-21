@@ -1,0 +1,192 @@
+{
+  "schema": "gamev0.entities/v0.1",
+  "version": "0.1",
+  "updated": "2026-11-21",
+  "layer": 1,
+  "biome_id": "level-01-coalmine",
+  "description": "矿井一层（M1-06）敌人与旱魃 BOSS 数值与 AI 行为配置，对齐 data/biomes/level-01-coalmine.json 与 data/texts/zh-CN.json。",
+  "entities": [
+    {
+      "id": "enemy-coal-ghost",
+      "name_key": "$enemy_coal_ghost",
+      "tier": "mob",
+      "archetype": "coal_ghost",
+      "hp": 22,
+      "damage": 6,
+      "damage_type": "物理",
+      "lantern_damage": 0.0,
+      "half_w": 3.0,
+      "height": 10.0,
+      "color": "#7BA8D6",
+      "tags": ["spirit"],
+      "weak_to": {
+        "阳": 2.0,
+        "火": 1.2
+      },
+      "move_mode": "ground",
+      "patrol_speed": 20.0,
+      "chase_speed": 42.0,
+      "aggro_range": 140.0,
+      "attack_range": 14.0,
+      "telegraph_ticks": 18,
+      "attack_cooldown_ticks": 54,
+      "drop": {
+        "silver": 15,
+        "materials": ["coal"]
+      }
+    },
+    {
+      "id": "enemy-earth-worm",
+      "name_key": "$enemy_earth_worm",
+      "tier": "mob",
+      "archetype": "earth_worm",
+      "hp": 28,
+      "damage": 7,
+      "damage_type": "物理",
+      "lantern_damage": 0.0,
+      "half_w": 3.5,
+      "height": 8.0,
+      "color": "#A67C52",
+      "tags": ["beast"],
+      "weak_to": {
+        "金": 1.3,
+        "火": 1.2
+      },
+      "move_mode": "ground",
+      "patrol_speed": 22.0,
+      "chase_speed": 46.0,
+      "lunge_speed": 108.0,
+      "aggro_range": 150.0,
+      "attack_range": 52.0,
+      "telegraph_ticks": 22,
+      "attack_cooldown_ticks": 72,
+      "drop": {
+        "silver": 10,
+        "materials": []
+      }
+    },
+    {
+      "id": "enemy-gas-wisp",
+      "name_key": "$enemy_gas_wisp",
+      "tier": "mob",
+      "archetype": "gas_wisp",
+      "hp": 12,
+      "damage": 4,
+      "damage_type": "火",
+      "lantern_damage": 0.0,
+      "half_w": 2.5,
+      "height": 6.0,
+      "color": "#F0A830",
+      "tags": ["fire", "hazard", "spirit"],
+      "weak_to": {
+        "水": 2.5,
+        "火": 0.2
+      },
+      "move_mode": "fly",
+      "patrol_speed": 18.0,
+      "chase_speed": 34.0,
+      "preferred_range": 56.0,
+      "aggro_range": 165.0,
+      "attack_range": 130.0,
+      "telegraph_ticks": 22,
+      "attack_cooldown_ticks": 84,
+      "projectile": {
+        "speed": 7.5,
+        "damage": 4.0,
+        "damage_type": "火",
+        "element": "火",
+        "ttl_ticks": 90,
+        "ignite": true
+      },
+      "drop": {
+        "silver": 10,
+        "materials": ["sulfur"]
+      }
+    },
+    {
+      "id": "enemy-painted-skin",
+      "name_key": "$enemy_painted_skin",
+      "tier": "elite",
+      "archetype": "painted_skin",
+      "hp": 100,
+      "damage": 8,
+      "damage_type": "阴",
+      "lantern_damage": 0.35,
+      "half_w": 3.5,
+      "height": 12.0,
+      "color": "#9B56B8",
+      "tags": ["eldritch", "elite"],
+      "weak_to": {
+        "金": 1.5,
+        "雷": 1.5,
+        "阳": 1.5
+      },
+      "move_mode": "ground",
+      "patrol_speed": 20.0,
+      "chase_speed": 38.0,
+      "preferred_range": 74.0,
+      "aggro_range": 185.0,
+      "attack_range": 150.0,
+      "telegraph_ticks": 26,
+      "attack_cooldown_ticks": 88,
+      "projectile": {
+        "speed": 6.2,
+        "damage": 8.0,
+        "damage_type": "阴",
+        "element": "阴",
+        "lantern_damage": 0.35,
+        "ttl_ticks": 120
+      },
+      "drop": {
+        "silver": 80,
+        "materials": ["cinnabar"]
+      }
+    },
+    {
+      "id": "enemy-drought-demon",
+      "name_key": "$enemy_drought_demon",
+      "tier": "boss",
+      "archetype": "drought_demon",
+      "hp": 420,
+      "damage": 14,
+      "damage_type": "火",
+      "lantern_damage": 0.0,
+      "half_w": 6.0,
+      "height": 16.0,
+      "color": "#D43824",
+      "tags": ["boss", "fire", "drought"],
+      "weak_to": {
+        "水": 2.0,
+        "阴": 2.0,
+        "火": 0.25
+      },
+      "move_mode": "boss",
+      "patrol_speed": 18.0,
+      "chase_speed": 42.0,
+      "lunge_speed": 124.0,
+      "aggro_range": 220.0,
+      "attack_range": 195.0,
+      "telegraph_ticks": 28,
+      "attack_cooldown_ticks": 78,
+      "phase2_hp_ratio": 0.5,
+      "wet_armor_crack_mult": 1.4,
+      "projectile": {
+        "speed": 8.5,
+        "damage": 10.0,
+        "damage_type": "火",
+        "element": "火",
+        "ttl_ticks": 110,
+        "ignite": true
+      },
+      "drop": {
+        "silver": 150,
+        "materials": ["cinnabar"],
+        "talisman": "body-bifang-huo"
+      }
+    }
+  ],
+  "v1_deviations": [
+    "level-01-coalmine.json 中旱魃 drop.talisman 写为简名 bifang_fire，此处直接对齐 data/talismans.json 正式 id body-bifang-huo 以便 tools/validate_data.py 强引用校验。",
+    "旱魃与硫烟鬼火均加入水接触直接灼伤（湿润破甲 1.4x + 产蒸汽），落实 level-01-coalmine.json「逼玩家第一次用葫芦装环境水」的设计意图；数值为 M1 占位，待 M1-α 实机自测调参。"
+  ]
+}

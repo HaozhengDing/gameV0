@@ -33,6 +33,7 @@ const WandUIScript := preload("res://scripts/wand_ui.gd")
 const WangGenScript := preload("res://scripts/wang_gen.gd")
 const SteleScript := preload("res://scripts/stele.gd")
 const BiomeHazardsScript := preload("res://scripts/biome_hazards.gd")
+const EnemyManagerScript := preload("res://scripts/enemies/enemy_manager.gd")
 # M1-10 反馈层（打击感六层）：火光 / 后坐 / 定向震屏 / 命中 / 击杀 / 分层音效
 const FxLayerScript := preload("res://scripts/feedback/fx_layer.gd")
 const ScreenFxScript := preload("res://scripts/feedback/screen_fx.gd")
@@ -70,6 +71,7 @@ var wand_ui
 var wang_gen
 var stele_layer
 var biome_hazards
+var enemy_manager
 var exit_marker: ColorRect
 var feedback
 var fx_layer
@@ -85,6 +87,7 @@ var completed := false
 var smoke_mode := false
 var shot_mode := false
 var fx_shot_mode := false
+var boss_shot_mode := false
 var use_wang_mine := true
 var world_w := WORLD_W
 var world_h := WORLD_H
@@ -106,7 +109,8 @@ func _ready() -> void:
 	var user_args := OS.get_cmdline_user_args()
 	smoke_mode = user_args.has("--t4b-smoke")
 	fx_shot_mode = user_args.has("--t4b-fx-shot")
-	shot_mode = user_args.has("--t4b-shot") or fx_shot_mode
+	boss_shot_mode = user_args.has("--t4b-boss-shot")
+	shot_mode = user_args.has("--t4b-shot") or fx_shot_mode or boss_shot_mode
 	use_wang_mine = not smoke_mode and not user_args.has("--classic-t4b")
 	if use_wang_mine:
 		world_w = WangGenScript.WORLD_W
@@ -182,10 +186,14 @@ func _physics_process(delta: float) -> void:
 func _tick_once() -> void:
 	sim.step_tick()
 	_drain_sim_events()
+	var pc: Vector2i = player.cell_pos()
+	if player != null and player.has_method("tick_invuln"):
+		player.tick_invuln()
+	if enemy_manager != null and not completed and not smoke_mode:
+		enemy_manager.step_tick(Vector2(pc), sim.get_tick())
 	if combat != null:
 		combat.step_tick()
 	vm.tick_advance()
-	var pc: Vector2i = player.cell_pos()
 	var qs_blocked: bool = biome_hazards.check_quicksilver_block(pc, sim.get_tick()) if biome_hazards != null else _is_player_in_quicksilver()
 	if wand_manager != null:
 		wand_manager.in_safe_zone = _is_player_in_safe_zone()
@@ -448,6 +456,12 @@ func _create_combat() -> void:
 	combat.setup(sim, event_bus, text_db, overlay, hud)
 	if vitals != null:
 		combat.player_heal_callback = func(amount: float) -> void: vitals.heal_hp(amount)
+	combat.player_pos_getter = func() -> Vector2:
+		return Vector2(player.cell_pos()) if player != null else Vector2.ZERO
+	combat.player_hit_callback = _on_player_hit_by_enemy
+	enemy_manager = EnemyManagerScript.new()
+	enemy_manager.setup(sim, combat, event_bus, text_db, hud, wand_manager)
+	enemy_manager.player_hit_callback = _on_player_hit_by_enemy
 
 ## M1-10 反馈层装配：世界空间 FX / 屏幕空间 FX / 分层音效 / 反馈导演（订阅 C-EVT）。
 func _create_feedback() -> void:
@@ -517,6 +531,9 @@ func _start_round() -> void:
 		wand_ui.set_open(false)
 	if combat != null:
 		combat.reset_round()
+	if enemy_manager != null:
+		enemy_manager.reset_round()
+	if combat != null:
 		if use_wang_mine and wang_gen != null:
 			_spawn_wang_targets()
 		else:
@@ -526,44 +543,12 @@ func _start_round() -> void:
 	_last_view = Vector2i(-999999, -999999)
 
 func _spawn_wang_targets() -> void:
-	var idx := 0
-	for raw_a in wang_gen.spawn_anchors:
-		if not (raw_a is Dictionary):
-			continue
-		var a: Dictionary = raw_a
-		var boss_id := String(a.get("boss_id", ""))
-		var half_w_i := 5 if boss_id == "boss-drought-demon" else 3
-		var height_i := 14 if boss_id == "boss-drought-demon" else 10
-		var pos: Vector2i = wang_gen.find_safe_stand_pos(sim, a["pos"], half_w_i, height_i)
-		if boss_id == "boss-drought-demon":
-			combat.spawn_entity({
-				"id": "boss_drought_demon",
-				"name": text_db.get_text("$enemy_drought_demon") if text_db != null else "旱魃",
-				"faction": "enemy",
-				"pos": Vector2(float(pos.x), float(pos.y)),
-				"half_w": 5.0,
-				"height": 14.0,
-				"max_hp": 420.0,
-				"tags": ["spirit", "boss"],
-				"weak_to": {"水": 2.0, "阴": 1.8, "火": 0.25},
-				"color": Color(0.88, 0.28, 0.16),
-			})
-		else:
-			var is_spirit := (idx % 2 == 0)
-			combat.spawn_entity({
-				"id": "wang_mob_%d" % idx,
-				"name": (text_db.get_text("$enemy_coal_ghost") if is_spirit else text_db.get_text("$enemy_earth_worm")) if text_db != null else "矿鬼",
-				"faction": "enemy",
-				"pos": Vector2(float(pos.x), float(pos.y)),
-				"max_hp": 30.0 if is_spirit else 35.0,
-				"tags": ["spirit"] if is_spirit else ["eldritch"],
-				"weak_to": {"阳": 2.0, "火": 1.2} if is_spirit else {"金": 1.5, "雷": 1.5},
-				"color": Color(0.54, 0.72, 0.88) if is_spirit else Color(0.72, 0.36, 0.70),
-			})
-		idx += 1
+	if enemy_manager != null:
+		enemy_manager.spawn_from_wang_anchors(wang_gen)
+		return
 
 func _spawn_demo_targets() -> void:
-	# M1-02 靶标实体（实机可试射；正式敌人 AI 在 M1-06 接入）
+	# M1-02 靶标实体（供 classic T4b 回归使用）
 	combat.spawn_entity({
 		"id": "mob_ghost_01",
 		"name": text_db.get_text("$enemy_coal_ghost") if text_db != null else "矿鬼",
@@ -585,17 +570,56 @@ func _spawn_demo_targets() -> void:
 		"color": Color(0.72, 0.36, 0.70),
 	})
 
+## M1-06：敌人近战或投射物命中玩家统一结算（无敌帧 + 击退 + 气血/魄灯扣减 + 死后复位）。
+func _on_player_hit_by_enemy(hit: Dictionary) -> void:
+	if player == null or vitals == null or vitals.is_dead():
+		return
+	if not smoke_mode and not player.can_take_enemy_hit():
+		return
+	player.start_enemy_invuln()
+	player.trigger_hurt_flash()
+	var dir_v: Variant = hit.get("dir", Vector2.ZERO)
+	if dir_v is Vector2:
+		var kb: Vector2 = (dir_v as Vector2).normalized() * 52.0 + Vector2(0.0, -24.0)
+		player.apply_knockback(kb)
+	var tick: int = int(hit.get("tick", sim.get_tick() if (sim != null and sim.has_world()) else 0))
+	var src: String = String(hit.get("source_id", "异物"))
+	var dmg: float = float(hit.get("damage", 0.0))
+	var dtype: String = String(hit.get("damage_type", "物理"))
+	var ldmg: float = float(hit.get("lantern_damage", 0.0))
+	var dead := false
+	if ldmg > 0.0:
+		var lres: Dictionary = vitals.extinguish_lanterns(ldmg, src, tick, event_bus)
+		if bool(lres.get("dead", false)):
+			dead = true
+	if not dead and dmg > 0.0:
+		var hres: Dictionary = vitals.take_hp_damage(dmg, dtype, src, tick, event_bus, "$ui_death_enemy")
+		if bool(hres.get("dead", false)):
+			dead = true
+	if dead and not smoke_mode:
+		if hud != null:
+			var death_msg: String = text_db.get_text("$ui_death_enemy") if (text_db != null and text_db.has_key("$ui_death_enemy")) else "死于矿中异物"
+			hud.log_event(death_msg + " · 回到起点")
+		vitals.reset()
+		var start_c: Vector2i = wang_gen.start_cell if (use_wang_mine and wang_gen != null) else LevelScript.START_CELL
+		player.set_cell_pos(start_c)
+		player.reset_motion()
+		_refresh_hud()
+
 func _on_combat_event(ev: Dictionary) -> void:
+	var etype: String = String(ev.get("type", ""))
+	if etype == "entity_killed" and enemy_manager != null:
+		enemy_manager.on_entity_killed(String(ev.get("target_id", "")))
 	if biome_hazards != null and player != null and not smoke_mode:
 		biome_hazards.on_event(ev, player.cell_pos())
 	if hud == null or smoke_mode:
 		return
-	var etype: String = String(ev.get("type", ""))
 	if etype == "entity_killed":
 		var tid: String = String(ev.get("target_id", ""))
 		var ent = combat.get_entity(tid) if combat != null else null
 		var label: String = ent.display_name if ent != null else tid
-		hud.log_event("击杀 " + label)
+		if ent == null or not ent.has_tag("boss"):
+			hud.log_event("击杀 " + label)
 	elif etype == "reaction_triggered":
 		var rid: String = String(ev.get("reaction_id", ""))
 		if rid in ["r-dog-blood-spirit", "r-quicksilver-ward", "r-cinnabar-talisman"]:
@@ -725,13 +749,20 @@ func _restart() -> void:
 ## 窗口模式目检用：Wang 模式下站在洞天入口安全区碑文旁；经典模式下站在房间 01 中部。
 func _setup_shot() -> void:
 	var shot_pos: Vector2i = wang_gen.start_cell if (use_wang_mine and wang_gen != null) else LevelScript.SHOT_PLAYER_CELL
-	if use_wang_mine and wang_gen != null and not wang_gen.steles.is_empty():
+	if boss_shot_mode and enemy_manager != null and enemy_manager.boss_ent != null:
+		var bp: Vector2i = enemy_manager.boss_ent.cell_pos()
+		shot_pos = wang_gen.find_safe_stand_pos(sim, Vector2i(bp.x - 85, bp.y), 2, 10)
+		enemy_manager.boss_ent.aggroed = true
+		enemy_manager.boss_ent.telegraph_ratio = 0.72
+		enemy_manager.boss_ent.telegraph_color = Color(1.0, 0.34, 0.14)
+	elif use_wang_mine and wang_gen != null and not wang_gen.steles.is_empty():
 		var st_pos: Vector2i = wang_gen.steles[0]["pos"]
 		shot_pos = Vector2i(st_pos.x - 16, st_pos.y)
 	player.set_cell_pos(shot_pos)
 	player.facing = Vector2.RIGHT
 	if stele_layer != null:
 		stele_layer.update_proximity(shot_pos, current_sanity, 0)
+	_refresh_hud()
 	_apply_view()
 	_shot_timer = 0.0
 	_shot_done = false
@@ -799,7 +830,9 @@ func _refresh_hud() -> void:
 	var target_exit: Vector2i = wang_gen.exit_cell if (use_wang_mine and wang_gen != null) else LevelScript.EXIT_CELL
 	var dist_x := roundi(Vector2(player.cell_pos()).distance_to(Vector2(target_exit))) if use_wang_mine else maxi(target_exit.x - player.cell_pos().x, 0)
 	var safe_tag := "安全区 · " if (wand_manager != null and wand_manager.in_safe_zone) else ""
-	var hint: String = "本轮完成 · R 重开" if completed else "%s出口 %d" % [safe_tag, dist_x]
+	var silver_tag := (" · 银 %d" % enemy_manager.silver_collected) if (enemy_manager != null and enemy_manager.silver_collected > 0) else ""
+	var hint: String = "本轮完成 · R 重开" if completed else "%s出口 %d%s" % [safe_tag, dist_x, silver_tag]
+	var boss_hud: Dictionary = enemy_manager.get_boss_hud_state(Vector2(player.cell_pos())) if enemy_manager != null else {"visible": false}
 	var status_items: Array = []
 	for st_id in executor.get_active_statuses():
 		var st_key := "$status_" + String(st_id)
@@ -840,6 +873,7 @@ func _refresh_hud() -> void:
 		"cursor_mat": _cursor_material_text(),
 		"exit_hint": hint,
 		"statuses": status_items,
+		"boss": boss_hud,
 	})
 
 func _cursor_material_text() -> String:
@@ -1492,6 +1526,219 @@ func _run_smoke() -> void:
 			fail = fb_fail
 		else:
 			print("T4B_SMOKE_STEP M1-10打击感六层 fx=ok screen=ok sfx=3 hitstop=ok recoil=ok")
+
+	# M1-06 敌人 AI 与旱魃 BOSS 战（5 敌人配置 / 矿鬼追击 / 画皮水银界+熄灯 / 鬼火引硫 / 旱魃火抗+泼水破甲+二阶段+击杀掉落）
+	if fail == "":
+		var m6_fail := ""
+		if enemy_manager == null or enemy_manager.defs.size() < 5:
+			m6_fail = "M1-06 敌人定义数量不足（%d）" % (enemy_manager.defs.size() if enemy_manager != null else 0)
+		else:
+			# 搭建隔离测试室 x=120..260, y=220..272（岩底 y=272..276）
+			var mat_rock_6: int = sim.material_id("rock")
+			var mat_qs_6: int = sim.material_id("quicksilver")
+			var mat_sul_6: int = sim.material_id("sulfur")
+			var mat_wat_6: int = sim.material_id("water")
+			sim.set_active_rect(110, 210, 170, 80)
+			for gy in range(218, 277):
+				for gx in range(118, 263):
+					var is_border := (gy >= 272 or gy <= 220 or gx <= 120 or gx >= 260)
+					sim.set_cell(gx, gy, mat_rock_6 if is_border else 0)
+			sim.wake_rect(118, 218, 145, 59)
+
+			# 15a) 矿鬼巡逻追击并挥爪伤害玩家
+			combat.reset_round()
+			enemy_manager.reset_round()
+			vitals.reset()
+			player.set_cell_pos(Vector2i(150, 271))
+			player.reset_motion()
+			var ghost_ent = enemy_manager.spawn_by_id("enemy-coal-ghost", Vector2i(178, 271), "smoke_ghost", 1)
+			var ghost_x0: float = ghost_ent.pos.x
+			for _t in range(95):
+				sim.step_tick()
+				enemy_manager.step_tick(Vector2(player.cell_pos()), sim.get_tick())
+				combat.step_tick()
+			var ghost_moved: bool = ghost_ent.pos.x < ghost_x0 - 8.0
+			var ghost_hit_ok: bool = vitals.hp < 100.0
+
+			# 15b) 画皮被水银界阻挡 + 阴气弹熄灯
+			combat.reset_round()
+			enemy_manager.reset_round()
+			vitals.reset()
+			player.set_cell_pos(Vector2i(150, 271))
+			player.reset_motion()
+			for gy in range(264, 272):
+				for gx in range(175, 182):
+					sim.set_cell(gx, gy, mat_qs_6)
+			var ps_ent = enemy_manager.spawn_by_id("enemy-painted-skin", Vector2i(204, 271), "smoke_painted_skin", 2)
+			for _t in range(120):
+				sim.step_tick()
+				enemy_manager.step_tick(Vector2(player.cell_pos()), sim.get_tick())
+				combat.step_tick()
+			var ps_warded: bool = ps_ent.pos.x >= 180.0
+			var ps_lantern_ok: bool = vitals.lanterns < 7.0
+
+			# 15c) 硫烟鬼火火弹引燃硫磺
+			combat.reset_round()
+			enemy_manager.reset_round()
+			vitals.reset()
+			for gy in range(262, 272):
+				for gx in range(146, 185):
+					sim.set_cell(gx, gy, 0)
+			for gy in range(260, 272):
+				for gx in range(150, 158):
+					sim.set_cell(gx, gy, mat_sul_6)
+			player.set_cell_pos(Vector2i(144, 271))
+			player.reset_motion()
+			enemy_manager.spawn_by_id("enemy-gas-wisp", Vector2i(206, 256), "smoke_wisp", 3)
+			var fired_proj_before: int = int(combat.stats["projectiles_spawned"])
+			for _t in range(105):
+				sim.step_tick()
+				enemy_manager.step_tick(Vector2(player.cell_pos()), sim.get_tick())
+				combat.step_tick()
+			var wisp_shot_ok: bool = int(combat.stats["projectiles_spawned"]) > fired_proj_before
+			var mat_tox_6: int = sim.material_id("toxic_smoke")
+			var mat_fire_6: int = sim.material_id("fire")
+			var wisp_ignited := (_count_material(Vector2i(156, 266), 12, mat_tox_6) > 0
+					or _count_material(Vector2i(156, 266), 12, mat_fire_6) > 0
+					or int(combat.stats["ignited"]) > 0)
+
+			# 15d) 旱魃 BOSS：火抗 0.25x / 泼水嘶鸣+湿润破甲 1.4x / 二阶段 / 击杀掉落
+			combat.reset_round()
+			enemy_manager.reset_round()
+			vitals.reset()
+			for gy in range(250, 272):
+				for gx in range(140, 230):
+					sim.set_cell(gx, gy, 0)
+			player.set_cell_pos(Vector2i(150, 271))
+			player.reset_motion()
+			var boss = enemy_manager.spawn_by_id("enemy-drought-demon", Vector2i(206, 271), "smoke_boss", 4)
+			var fire_dealt: float = boss.take_damage(40.0, "火", "smoke", sim.get_tick(), event_bus)
+			for gy in range(264, 272):
+				for gx in range(200, 214):
+					sim.set_cell(gx, gy, mat_wat_6)
+			var hp_before_wat: float = boss.hp
+			for _t in range(36):
+				sim.step_tick()
+				enemy_manager.step_tick(Vector2(player.cell_pos()), sim.get_tick())
+				combat.step_tick()
+			var boss_wet_ok: bool = boss.has_status("wet") and boss.hp < hp_before_wat
+			var crack_dealt: float = boss.take_damage(20.0, "金", "smoke", sim.get_tick(), event_bus)
+			boss.take_damage(120.0, "水", "smoke", sim.get_tick(), event_bus)
+			for _t in range(10):
+				sim.step_tick()
+				enemy_manager.step_tick(Vector2(player.cell_pos()), sim.get_tick())
+				combat.step_tick()
+			var boss_p2_ok: bool = boss.phase == 2
+			boss.take_damage(500.0, "阴", "smoke", sim.get_tick(), event_bus)
+			var boss_drop_ok: bool = (not boss.alive and enemy_manager.boss_killed
+					and enemy_manager.silver_collected >= 150
+					and wand_manager != null and wand_manager.bag.has("body-bifang-huo"))
+
+			if not ghost_moved or not ghost_hit_ok:
+				m6_fail = "M1-06 矿鬼追击/攻击失败（moved=%s hp=%.1f）" % [str(ghost_moved), vitals.hp]
+			elif not ps_warded or not ps_lantern_ok:
+				m6_fail = "M1-06 画皮水银界或阴弹熄灯失败（x=%.1f lanterns=%.2f）" % [ps_ent.pos.x, vitals.lanterns]
+			elif not wisp_shot_ok or not wisp_ignited:
+				m6_fail = "M1-06 硫烟鬼火发射/引燃失败（shot=%s ignited=%s）" % [str(wisp_shot_ok), str(wisp_ignited)]
+			elif absf(fire_dealt - 10.0) > 0.05:
+				m6_fail = "M1-06 旱魃火抗 0.25x 异常（dealt=%.2f）" % fire_dealt
+			elif not boss_wet_ok or absf(crack_dealt - 28.0) > 0.05:
+				m6_fail = "M1-06 旱魃泼水破甲异常（wet=%s crack=%.2f）" % [str(boss_wet_ok), crack_dealt]
+			elif not boss_p2_ok or not boss_drop_ok:
+				m6_fail = "M1-06 旱魃二阶段或掉落异常（p2=%s drop=%s silver=%d）" % [str(boss_p2_ok), str(boss_drop_ok), enemy_manager.silver_collected]
+			else:
+				print("T4B_SMOKE_STEP M1-06敌人与旱魃 defs=5 ghost=ok ward_lantern=ok wisp_ignite=ok boss_wet=%.1f p2=ok drop=%d" % [
+					crack_dealt, enemy_manager.silver_collected
+				])
+		if m6_fail != "":
+			fail = m6_fail
+
+	# m1-jump-feel P0 跳跃跟手断言（土狼时间 0.10s / 跳跃缓冲 0.10s / 可变跳高 0.10s 窗口切断）
+	if fail == "":
+		var jf_fail := ""
+		var mat_rock_j: int = sim.material_id("rock")
+		# 搭一座隔离跳台：左台 x=300..330, y=272..276；下层全宽地面 x=298..395, y=316..322
+		for gy in range(250, 323):
+			for gx in range(298, 396):
+				var solid_plat := (gy >= 272 and gy <= 276 and gx >= 300 and gx <= 330) or (gy >= 316)
+				sim.set_cell(gx, gy, mat_rock_j if solid_plat else 0)
+		player.fire_blocks_movement = false
+		# 16a) 土狼时间：离台 5 帧(0.083s < 0.10s)应可跳；离台 8 帧(0.133s > 0.10s)不应起跳
+		player.set_cell_pos(Vector2i(318, 271))
+		player.reset_motion()
+		player.levitate = 0.0
+		for _s in range(6):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		player.set_cell_pos(Vector2i(342, 271))
+		for _i in range(5):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		player.step_physics(FIXED_DT, 0.0, true, false)
+		var coyote_ok: bool = player.velocity.y < -50.0
+
+		player.set_cell_pos(Vector2i(318, 271))
+		player.reset_motion()
+		player.levitate = 0.0
+		for _s in range(6):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		player.set_cell_pos(Vector2i(342, 271))
+		for _i in range(8):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		player.step_physics(FIXED_DT, 0.0, true, false)
+		var coyote_expire_ok: bool = player.velocity.y >= 0.0
+
+		# 16b) 跳跃缓冲：落地前 2 帧事件入队（按键不按住），落地当帧自动起跳
+		player.set_cell_pos(Vector2i(355, 311))
+		player.reset_motion()
+		player.levitate = 0.0
+		player.velocity.y = 95.0
+		player.queue_jump_buffer()
+		var buf_jumped := false
+		for _i in range(6):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+			if player.velocity.y < -40.0:
+				buf_jumped = true
+				break
+
+		# 16c) 可变跳高：起跳后 0.05s(3 帧)松手 vs 满按 0.16s(10 帧)，短按峰高显著更低
+		player.set_cell_pos(Vector2i(355, 315))
+		player.reset_motion()
+		player.levitate = 0.0
+		for _s in range(6):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		var y0_short: float = player.position.y
+		var min_y_short: float = y0_short
+		for i in range(28):
+			player.step_physics(FIXED_DT, 0.0, i < 3, false)
+			min_y_short = minf(min_y_short, player.position.y)
+		var rise_short: float = (y0_short - min_y_short) / float(SCALE)
+
+		player.set_cell_pos(Vector2i(355, 315))
+		player.reset_motion()
+		player.levitate = 0.0
+		for _s in range(6):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		var y0_full: float = player.position.y
+		var min_y_full: float = y0_full
+		for i in range(28):
+			player.step_physics(FIXED_DT, 0.0, i < 10, false)
+			min_y_full = minf(min_y_full, player.position.y)
+		var rise_full: float = (y0_full - min_y_full) / float(SCALE)
+
+		if not coyote_ok or not coyote_expire_ok:
+			jf_fail = "m1-jump-feel 土狼时间断言失败（in_win=%s expired=%s）" % [str(coyote_ok), str(coyote_expire_ok)]
+		elif not buf_jumped:
+			jf_fail = "m1-jump-feel 跳跃缓冲落地自动起跳失败"
+		elif rise_short >= rise_full * 0.72 or rise_full < 8.0:
+			jf_fail = "m1-jump-feel 可变跳高切断不足（short=%.1f full=%.1f）" % [rise_short, rise_full]
+		else:
+			print("T4B_SMOKE_STEP m1-jump-feel_P0 coyote=ok buffer=ok var_jump=%.1f<%.1f" % [rise_short, rise_full])
+		if jf_fail != "":
+			fail = jf_fail
+
+	# 复位 vitals 供末尾统一汇报
+	vitals.reset()
+	vitals.take_hp_damage(15.0, "土", "smoke_summary", sim.get_tick(), null, "$ui_death_enemy")
+
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)
 		print("T4B_SMOKE_FAIL " + fail)

@@ -8,11 +8,17 @@ const BURN_TICK_INTERVAL := 30         # 每 0.5s 结算一次持续伤（60Hz�
 const POISON_TICK_INTERVAL := 30
 const DOG_BLOOD_COOLDOWN := 18         # 防止单帧重复连吃多格黑狗血瞬间蒸发
 const WARD_EVENT_COOLDOWN := 60        # 水银界阻挡事件节流（1s）
+const WATER_SIZZLE_COOLDOWN := 30      # 旱魃/鬼火沾水每 0.5s 结算一次水灼 + 蒸汽
+const YIN_SEEP_COOLDOWN := 30          # 旱魃触阴气每 0.5s 结算一次阴蚀
 
 var entity_id: String = ""
 var display_name: String = ""
 var faction: String = "enemy"          # "player" / "enemy" / "neutral"
+var tier: String = "mob"               # "mob" / "elite" / "boss"
+var archetype: String = ""             # coal_ghost / earth_worm / gas_wisp / painted_skin / drought_demon
 var pos: Vector2 = Vector2.ZERO        # 脚底中心 cell 坐标（与 player.gd 一致）
+var vel: Vector2 = Vector2.ZERO        # cells/s（AI 移动与击退速度）
+var facing: float = -1.0               # -1 左 / +1 右
 var half_w: float = 3.0                # 碰撞盒宽 = 2*half_w
 var height: float = 10.0               # 碰撞盒高 = [pos.y - height + 1, pos.y]
 
@@ -21,26 +27,40 @@ var hp: float = 30.0
 var alive: bool = true
 var color: Color = Color(0.82, 0.34, 0.34)
 
-var tags: Array[String] = []           # spirit / eldritch / paper / undead 等
+var tags: Array[String] = []           # spirit / eldritch / paper / fire / drought / boss 等
 var weak_to: Dictionary = {}           # damage_type -> float 倍率（无全局五行乘数）
+var wet_armor_crack_mult: float = 1.4  # 旱魃湿润破甲倍率（非火伤）
 var statuses: Dictionary = {}          # status_name -> {ticks, dps, accum}
+var drop: Dictionary = {}              # {silver, materials, talisman}
+var ai_cfg: Dictionary = {}            # data/entities/layer01.json 原始配置快照
 
+var aggroed: bool = false
+var phase: int = 1
+var telegraph_ratio: float = 0.0       # 0..1 攻击前摇可视化强度（D1 可读优先）
+var telegraph_color: Color = Color(1.0, 0.56, 0.20)
 var temp_slot_ticks: int = 0           # r-cinnabar-talisman 临时符位剩余 tick（60s = 3600）
 var hurt_flash_ticks: int = 0
 var _blood_cd: int = 0
 var _ward_cd: int = 0
+var _water_sizzle_cd: int = 0
+var _yin_seep_cd: int = 0
 
 func init_entity(cfg: Dictionary) -> void:
 	entity_id = String(cfg.get("id", "entity"))
 	display_name = String(cfg.get("name", entity_id))
 	faction = String(cfg.get("faction", "enemy"))
+	tier = String(cfg.get("tier", "mob"))
+	archetype = String(cfg.get("archetype", ""))
 	pos = cfg.get("pos", Vector2.ZERO)
+	vel = Vector2.ZERO
+	facing = float(cfg.get("facing", -1.0))
 	half_w = float(cfg.get("half_w", 3.0))
 	height = float(cfg.get("height", 10.0))
-	max_hp = maxf(float(cfg.get("max_hp", 30.0)), 1.0)
+	max_hp = maxf(float(cfg.get("max_hp", cfg.get("hp", 30.0))), 1.0)
 	hp = float(cfg.get("hp", max_hp))
 	alive = hp > 0.0
-	color = cfg.get("color", Color(0.82, 0.34, 0.34))
+	var raw_col: Variant = cfg.get("color", Color(0.82, 0.34, 0.34))
+	color = Color(raw_col) if raw_col is String else (raw_col as Color)
 	tags.clear()
 	for t in cfg.get("tags", []):
 		tags.append(String(t))
@@ -50,11 +70,29 @@ func init_entity(cfg: Dictionary) -> void:
 		var wtd: Dictionary = wt
 		for k in wtd.keys():
 			weak_to[String(k)] = float(wtd[k])
+	wet_armor_crack_mult = float(cfg.get("wet_armor_crack_mult", 1.4))
+	var raw_drop: Variant = cfg.get("drop", {})
+	drop = (raw_drop as Dictionary).duplicate(true) if raw_drop is Dictionary else {}
+	var raw_ai: Variant = cfg.get("ai_cfg", {})
+	ai_cfg = (raw_ai as Dictionary).duplicate(true) if raw_ai is Dictionary else {}
 	statuses.clear()
+	aggroed = false
+	phase = 1
+	telegraph_ratio = 0.0
 	temp_slot_ticks = 0
 	hurt_flash_ticks = 0
 	_blood_cd = 0
 	_ward_cd = 0
+	_water_sizzle_cd = 0
+	_yin_seep_cd = 0
+
+func apply_knockback(impulse: Vector2) -> void:
+	if not alive:
+		return
+	var resist := 0.28 if has_tag("boss") else (0.55 if has_tag("elite") else 1.0)
+	vel += impulse * resist
+	vel.x = clampf(vel.x, -120.0, 120.0)
+	vel.y = clampf(vel.y, -90.0, 120.0)
 
 func center_pos() -> Vector2:
 	return Vector2(pos.x, pos.y - height * 0.5)
@@ -94,10 +132,13 @@ func distance_to_point(p: Vector2) -> float:
 	return Vector2(p.x - cx, p.y - cy).length()
 
 ## 仅按实体自身 weak_to（含抗性 <1.0）计算最终伤害；遵循 data/magic_numbers.json elements.in_damage_formula=false。
+## 旱魃（drought 标签）处于 wet 状态时旱甲破裂：非火伤额外承受 wet_armor_crack_mult 倍。
 func compute_damage(base_amount: float, damage_type: String) -> float:
 	if base_amount <= 0.0:
 		return 0.0
 	var mult: float = float(weak_to.get(damage_type, 1.0))
+	if has_tag("drought") and has_status("wet") and damage_type != "火":
+		mult *= wet_armor_crack_mult
 	return maxf(base_amount * mult, 0.0)
 
 func take_damage(base_amount: float, damage_type: String, source_id: String, tick: int, event_bus) -> float:
@@ -108,6 +149,7 @@ func take_damage(base_amount: float, damage_type: String, source_id: String, tic
 		return 0.0
 	hp = maxf(hp - final_dmg, 0.0)
 	hurt_flash_ticks = 12
+	aggroed = true
 	if event_bus != null:
 		event_bus.publish("entity_damaged", tick, {
 			"source_id": source_id,
@@ -202,6 +244,10 @@ func step_tick(sim: SimWorldNode, tick: int, event_bus, mat_ids: Dictionary) -> 
 		_blood_cd -= 1
 	if _ward_cd > 0:
 		_ward_cd -= 1
+	if _water_sizzle_cd > 0:
+		_water_sizzle_cd -= 1
+	if _yin_seep_cd > 0:
+		_yin_seep_cd -= 1
 	if temp_slot_ticks > 0:
 		temp_slot_ticks -= 1
 
@@ -243,12 +289,16 @@ func _sample_environment(sim: SimWorldNode, tick: int, event_bus, mat_ids: Dicti
 	var mat_toxic: int = int(mat_ids.get("toxic_smoke", -1))
 	var mat_blood: int = int(mat_ids.get("black_dog_blood", -1))
 	var mat_cinnabar: int = int(mat_ids.get("cinnabar", -1))
+	var mat_yin: int = int(mat_ids.get("yin_qi", -1))
+	var mat_steam: int = int(mat_ids.get("steam", -1))
 
 	var saw_water := false
+	var water_cell := Vector2i(-1, -1)
 	var saw_fire := false
 	var saw_toxic := false
 	var blood_cell := Vector2i(-1, -1)
 	var cinnabar_cell := Vector2i(-1, -1)
+	var yin_cell := Vector2i(-1, -1)
 
 	for gy in range(cy - hh + 1, cy + 1):
 		if gy < 0 or gy >= h:
@@ -261,6 +311,8 @@ func _sample_environment(sim: SimWorldNode, tick: int, event_bus, mat_ids: Dicti
 				continue
 			if m == mat_water:
 				saw_water = true
+				if water_cell.x < 0:
+					water_cell = Vector2i(gx, gy)
 			elif m == mat_fire or (sim.get_material_flammable(m) and sim.get_cell_aux(gx, gy) > 0):
 				saw_fire = true
 			elif m == mat_toxic:
@@ -269,13 +321,25 @@ func _sample_environment(sim: SimWorldNode, tick: int, event_bus, mat_ids: Dicti
 				blood_cell = Vector2i(gx, gy)
 			elif m == mat_cinnabar and cinnabar_cell.x < 0:
 				cinnabar_cell = Vector2i(gx, gy)
+			elif m == mat_yin and yin_cell.x < 0:
+				yin_cell = Vector2i(gx, gy)
 
 	if saw_water:
 		apply_status("wet", 300, tick, event_bus)
-	if saw_fire:
+		# M1-06：旱魃 / 硫烟鬼火沾水立即嘶鸣产蒸汽并吃水属性伤害（逼玩家用葫芦泼水/引水池）
+		if (has_tag("drought") or has_tag("fire")) and _water_sizzle_cd <= 0:
+			_water_sizzle_cd = WATER_SIZZLE_COOLDOWN
+			if water_cell.x >= 0 and mat_steam >= 0:
+				sim.set_cell(water_cell.x, water_cell.y, mat_steam)
+			take_damage(6.0, "水", "water_sizzle", tick, event_bus)
+	if saw_fire and not has_tag("fire") and not has_tag("drought"):
 		apply_status("burning", 300, tick, event_bus)
 	if saw_toxic:
 		apply_status("poison", 180, tick, event_bus, 3.0)
+	if yin_cell.x >= 0 and has_tag("drought") and _yin_seep_cd <= 0:
+		_yin_seep_cd = YIN_SEEP_COOLDOWN
+		sim.set_cell(yin_cell.x, yin_cell.y, 0)
+		take_damage(8.0, "阴", "yin_qi", tick, event_bus)
 
 	# M1-12 反应 #6：r-dog-blood-spirit（黑狗血 × spirit -> 消耗血，20 阳伤）
 	if blood_cell.x >= 0 and has_tag("spirit") and _blood_cd <= 0:

@@ -21,7 +21,11 @@ const LEVITATE_MAX := 100.0         # 浮空条上限（约 1.9s 连续推力，
 const LEVITATE_DRAIN := 52.0        # /s 浮空消耗
 const LEVITATE_REGEN := 165.0       # /s 落地快速回充（~0.6s 满）
 const LEVITATE_REGEN_DELAY := 0.08  # s 停推后短延迟再回充
-const COYOTE_TIME := 0.08           # s 离地宽容起跳时间
+const COYOTE_TIME := 0.10           # s 离地宽容起跳时间（m1-jump-feel P0：0.08 -> 0.10，6 帧）
+const JUMP_BUFFER := 0.10           # s 跳跃缓冲（m1-jump-feel P0：落地前按下不吞键）
+const JUMP_CUT_WINDOW := 0.10       # s 可变跳高切断窗口（适配浮空条，过窗后不砍浮空惯性）
+const JUMP_CUT := 0.35              # 窗口内松手切断上升倍率
+const ENEMY_HURT_INVULN_TICKS := 24 # 0.40s 敌击无敌帧（防止近战贴身连帧秒杀）
 const STEP_UP_MAX := 3              # cells 走过碎沙/粉堆自动迈步上限
 const MAX_SUBSTEP_PX := 2.0         # 0.5 cell/步，防止穿墙或贴墙留缝
 
@@ -52,13 +56,29 @@ var world_w := WORLD_W
 var world_h := WORLD_H
 
 var _coyote_timer := 0.0
+var _jump_buffer_timer := 0.0
+var _jump_cut_timer := 0.0
+var _jump_cut_used := false
 var _regen_delay_timer := 0.0
 var _prev_thrust := false
 var _hurt_timer := 0.0
+var hurt_invuln_ticks := 0
 var recoil := Vector2.ZERO           # 世界像素：法器后坐造成的人物视觉位移（不参与碰撞）
 var _body_rect: ColorRect
 var _eye_rect: ColorRect
 var _jet_rect: ColorRect
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not input_enabled or not physics_enabled:
+		return
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		if key.pressed and not key.echo and key.keycode in [KEY_W, KEY_UP, KEY_SPACE]:
+			queue_jump_buffer()
+
+## m1-jump-feel P0：事件驱动写入跳跃缓冲（避免轮询在两物理帧间吞键）。
+func queue_jump_buffer() -> void:
+	_jump_buffer_timer = JUMP_BUFFER
 
 func setup(p_sim: SimWorldNode) -> void:
 	sim = p_sim
@@ -79,10 +99,29 @@ func reset_motion() -> void:
 	in_liquid = false
 	is_thrusting = false
 	_coyote_timer = 0.0
+	_jump_buffer_timer = 0.0
+	_jump_cut_timer = 0.0
+	_jump_cut_used = false
 	_regen_delay_timer = 0.0
 	_prev_thrust = false
 	_hurt_timer = 0.0
+	hurt_invuln_ticks = 0
 	_update_visual()
+
+func tick_invuln() -> void:
+	if hurt_invuln_ticks > 0:
+		hurt_invuln_ticks -= 1
+
+func can_take_enemy_hit() -> bool:
+	return hurt_invuln_ticks <= 0
+
+func start_enemy_invuln() -> void:
+	hurt_invuln_ticks = ENEMY_HURT_INVULN_TICKS
+
+func apply_knockback(impulse_cells_per_sec: Vector2) -> void:
+	velocity += impulse_cells_per_sec
+	velocity.x = clampf(velocity.x, -140.0, 140.0)
+	velocity.y = clampf(velocity.y, -110.0, MAX_FALL_SPEED)
 
 func cell_pos() -> Vector2i:
 	return Vector2i(floori(position.x / float(SCALE)), floori(position.y / float(SCALE)))
@@ -210,15 +249,33 @@ func step_physics(delta: float, move_x: float, thrust: bool, dive: bool) -> void
 		var decel := DECEL_GROUND if on_ground else DECEL_AIR
 		velocity.x = move_toward(velocity.x, 0.0, decel * dt)
 
-	# 3) 起跳 + Noita 式有限浮空 + 液体浮力
+	# 3) 起跳（m1-jump-feel P0：土狼时间 + 跳跃缓冲 + 窗口内松手切断上升）+ Noita 式有限浮空 + 液体浮力
 	var thrust_just_pressed := thrust and not _prev_thrust
 	_prev_thrust = thrust
+	if thrust_just_pressed:
+		_jump_buffer_timer = JUMP_BUFFER
 	is_thrusting = false
+	var jumped_this_step := false
 
-	if thrust_just_pressed and _coyote_timer > 0.0 and not in_liquid:
+	if _jump_buffer_timer > 0.0 and _coyote_timer > 0.0 and not in_liquid:
 		velocity.y = minf(velocity.y, JUMP_IMPULSE)
 		_coyote_timer = 0.0
+		_jump_buffer_timer = 0.0
 		on_ground = false
+		_jump_cut_timer = JUMP_CUT_WINDOW
+		_jump_cut_used = false
+		jumped_this_step = true
+	elif _jump_buffer_timer > 0.0:
+		_jump_buffer_timer = maxf(_jump_buffer_timer - dt, 0.0)
+
+	# 可变跳高（§4-A）：只在起跳后 JUMP_CUT_WINDOW（0.10s）内松手切断上升；过窗后进浮空不砍惯性
+	if not jumped_this_step and _jump_cut_timer > 0.0:
+		if not thrust and not _jump_cut_used and velocity.y < 0.0:
+			velocity.y *= JUMP_CUT
+			_jump_cut_used = true
+			_jump_cut_timer = 0.0
+		else:
+			_jump_cut_timer = maxf(_jump_cut_timer - dt, 0.0)
 
 	if thrust and (levitate > 0.5 or in_liquid):
 		is_thrusting = true

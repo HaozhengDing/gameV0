@@ -22,6 +22,8 @@ var text_db
 var overlay
 var hud
 var player_heal_callback: Callable = Callable()
+var player_pos_getter: Callable = Callable()
+var player_hit_callback: Callable = Callable()
 
 var projectiles: Array = []      # Array of ProjectileScript
 var entities: Array = []         # Array of EntityScript
@@ -197,7 +199,8 @@ func _execute_action(action: Dictionary, pos: Vector2, dir: Vector2, owner_id: S
 		"ignite":
 			var duration_sec: float = maxf(float(action.get("duration", 3.0)), 0.5)
 			var dps: float = float(action.get("damage_per_sec", 0.0))
-			var lit: int = sim.apply_heat_burst(cell.x, cell.y, 3, HEAT_BURST_TEMP)
+			var heat_r: int = maxi(int(action.get("radius", 5)), 3)
+			var lit: int = sim.apply_heat_burst(cell.x, cell.y, heat_r, HEAT_BURST_TEMP)
 			summary["ignited"] = int(summary["ignited"]) + lit
 			stats["ignited"] = int(stats["ignited"]) + lit
 			var dur_ticks := roundi(duration_sec * 60.0)
@@ -376,6 +379,25 @@ func _step_projectile(proj, tick: int) -> void:
 			proj.alive = false
 			return
 
+		# a0) 敌方投射物命中玩家检测（M1-06）
+		if proj.faction == "enemy" and _hits_player(proj.pos, proj.radius):
+			stats["hits_entity"] = int(stats["hits_entity"]) + 1
+			if player_hit_callback.is_valid():
+				player_hit_callback.call({
+					"pos": proj.pos,
+					"dir": proj.direction(),
+					"damage": proj.damage,
+					"damage_type": proj.damage_type,
+					"lantern_damage": proj.lantern_damage,
+					"source_id": proj.owner_id,
+					"tick": tick,
+				})
+			for payload in proj.payloads:
+				_execute_action(payload, proj.pos, proj.direction(), proj.owner_id, proj.faction, null, dummy_summary, 1)
+			_try_fire_trigger(proj, "on_hit", null, dummy_summary)
+			proj.alive = false
+			return
+
 		# a) 实体碰撞检测（敌对阵营）
 		var hit_ent = _find_entity_hit(proj)
 		if hit_ent != null:
@@ -384,6 +406,8 @@ func _step_projectile(proj, tick: int) -> void:
 			if proj.damage > 0.0:
 				var dealt: float = hit_ent.take_damage(proj.damage, proj.damage_type, proj.owner_id, tick, event_bus)
 				stats["total_damage"] = float(stats["total_damage"]) + dealt
+				if dealt > 0.0:
+					hit_ent.apply_knockback(proj.direction() * 42.0 + Vector2(0.0, -14.0))
 			for payload in proj.payloads:
 				_execute_action(payload, proj.pos, proj.direction(), proj.owner_id, proj.faction, hit_ent, dummy_summary, 1)
 			_try_fire_trigger(proj, "on_hit", hit_ent, dummy_summary)
@@ -450,6 +474,17 @@ func _entities_in_radius(center: Vector2, radius: float, attacker_faction: Strin
 			out.append(ent)
 	return out
 
+func _hits_player(p: Vector2, pad: float = 0.0) -> bool:
+	if not player_pos_getter.is_valid():
+		return false
+	var pp: Vector2 = player_pos_getter.call()
+	return (
+		p.x >= pp.x - 2.5 - pad
+		and p.x <= pp.x + 2.5 + pad
+		and p.y >= pp.y - 10.0 - pad
+		and p.y <= pp.y + pad
+	)
+
 func _damage_entities_in_radius(center: Vector2, radius: float, amount: float, dtype: String,
 		source_id: String, attacker_faction: String, tick: int) -> float:
 	if amount <= 0.0:
@@ -458,6 +493,19 @@ func _damage_entities_in_radius(center: Vector2, radius: float, amount: float, d
 	for ent in _entities_in_radius(center, radius, attacker_faction):
 		var dealt: float = ent.take_damage(amount, dtype, source_id, tick, event_bus)
 		total += dealt
+	if attacker_faction == "enemy" and _hits_player(center, radius) and player_hit_callback.is_valid():
+		var pp: Vector2 = player_pos_getter.call()
+		var kb_dir := (pp - center).normalized() if pp.distance_to(center) > 0.1 else Vector2.UP
+		player_hit_callback.call({
+			"pos": center,
+			"dir": kb_dir,
+			"damage": amount,
+			"damage_type": dtype,
+			"lantern_damage": 0.0,
+			"source_id": source_id,
+			"tick": tick,
+		})
+		total += amount
 	stats["total_damage"] = float(stats["total_damage"]) + total
 	return total
 
@@ -538,7 +586,7 @@ func _log(text: String) -> void:
 # ------------------------------------------------------------------ 灰盒绘制
 
 func _draw() -> void:
-	# 1) 战斗实体 + 极简血条与状态点
+	# 1) 战斗实体 + 灰盒辨识剪影 + 攻击前摇预警圈 + 极简血条与状态点
 	for ent in entities:
 		if not ent.alive:
 			continue
@@ -546,15 +594,46 @@ func _draw() -> void:
 		var by: float = (ent.pos.y - ent.height) * float(SCALE)
 		var bw: float = ent.half_w * 2.0 * float(SCALE)
 		var bh: float = ent.height * float(SCALE)
+		var center_px := Vector2(bx + bw * 0.5, by + bh * 0.5)
+
+		# 攻击前摇可读预警圈（D1 可读优先）
+		if ent.telegraph_ratio > 0.01:
+			var tc: Color = ent.telegraph_color
+			var tr: float = maxf(bw, bh) * (0.62 + 0.35 * (1.0 - ent.telegraph_ratio))
+			draw_arc(center_px, tr, 0.0, TAU, 24, Color(tc.r, tc.g, tc.b, 0.35 + 0.55 * ent.telegraph_ratio), 2.5)
+			draw_circle(center_px, tr * 0.45, Color(tc.r, tc.g, tc.b, 0.22 * ent.telegraph_ratio))
+
+		# 旱魃二阶段暗红灼热外环
+		if ent.archetype == "drought_demon" and ent.phase >= 2:
+			draw_arc(center_px, maxf(bw, bh) * 0.68, 0.0, TAU, 24, Color(1.0, 0.36, 0.12, 0.55), 2.0)
+
 		var body_col: Color = Color(1.0, 0.96, 0.92) if ent.hurt_flash_ticks > 0 else ent.color
-		draw_rect(Rect2(bx, by, bw, bh), body_col)
-		# 血条（位于实体头顶 6px）
+		if ent.archetype == "gas_wisp":
+			# 硫烟鬼火：菱形/双层火核剪影
+			draw_circle(center_px, bw * 0.62, Color(body_col.r, body_col.g, body_col.b, 0.35))
+			draw_circle(center_px, bw * 0.44, body_col)
+			draw_circle(center_px, bw * 0.20, Color(1.0, 0.96, 0.72))
+		else:
+			draw_rect(Rect2(bx, by, bw, bh), body_col)
+			# 旱魃角冠 / 画皮兜帽顶饰
+			if ent.archetype == "drought_demon":
+				draw_rect(Rect2(bx + 2.0, by - 8.0, 8.0, 8.0), Color(0.98, 0.52, 0.16))
+				draw_rect(Rect2(bx + bw - 10.0, by - 8.0, 8.0, 8.0), Color(0.98, 0.52, 0.16))
+			elif ent.archetype == "painted_skin":
+				draw_rect(Rect2(bx - 2.0, by - 4.0, bw + 4.0, 6.0), Color(0.42, 0.20, 0.54))
+			# 朝向眼部像素点（清晰读出敌人面向）
+			var eye_x := bx + (bw - 8.0 if ent.facing >= 0.0 else 3.0)
+			var eye_y := by + minf(bh * 0.25, 10.0)
+			var eye_col := Color(1.0, 0.90, 0.32) if (ent.archetype == "drought_demon" or ent.archetype == "painted_skin") else Color(0.10, 0.10, 0.12)
+			draw_rect(Rect2(eye_x, eye_y, 5.0, 5.0), eye_col)
+
+		# 血条（位于实体头顶 6px；BOSS 在顶部仍保留小条+屏幕底中主血条）
 		var ratio := clampf(ent.hp / maxf(ent.max_hp, 1.0), 0.0, 1.0)
 		var bar_w := maxf(bw, 24.0)
 		var bar_x := bx + (bw - bar_w) * 0.5
-		var bar_y := by - 8.0
+		var bar_y := by - (14.0 if ent.archetype == "drought_demon" else 8.0)
 		draw_rect(Rect2(bar_x, bar_y, bar_w, 4.0), Color(0.10, 0.10, 0.12, 0.85))
-		draw_rect(Rect2(bar_x, bar_y, bar_w * ratio, 4.0), Color(0.92, 0.30, 0.24))
+		draw_rect(Rect2(bar_x, bar_y, bar_w * ratio, 4.0), Color(0.96, 0.42, 0.20) if ent.archetype == "drought_demon" else Color(0.92, 0.30, 0.24))
 		# 状态小色点（燃 / 湿 / 镇 / 毒）
 		var dot_x := bar_x
 		var dot_y := bar_y - 6.0
@@ -577,5 +656,6 @@ func _draw() -> void:
 			var tc: Color = proj.color
 			draw_line(p0, p1, Color(tc.r, tc.g, tc.b, alpha), 3.0)
 		var pc: Vector2 = proj.pos * float(SCALE)
-		draw_circle(pc, 4.5, proj.color)
-		draw_circle(pc, 2.2, Color(1.0, 1.0, 0.96))
+		var r_outer := 5.5 if proj.faction == "enemy" else 4.5
+		draw_circle(pc, r_outer, proj.color)
+		draw_circle(pc, 2.2, Color(1.0, 0.96, 0.88) if proj.faction == "player" else Color(0.18, 0.06, 0.14))

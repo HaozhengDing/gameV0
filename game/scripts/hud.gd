@@ -68,15 +68,20 @@ var _info_bg: ColorRect
 var _mat_label: Label
 var _exit_label: Label
 
-# 事件日志 / 键位 / 通关
+# 事件日志 / 键位 / 通关 / BOSS 血条（M1-06）
 var _log_bg: ColorRect
 var _log_label: Label
+var _boss_bg: ColorRect
+var _boss_track: ColorRect
+var _boss_fill: ColorRect
+var _boss_label: Label
 var _complete_bg: ColorRect
 var _complete: Label
 var _lines: Array = []
 
 const BAR_W := 214.0
 const GOURD_W := 142.0
+const BOSS_BAR_W := 460.0
 
 func _ready() -> void:
 	layer = 10
@@ -85,6 +90,7 @@ func _ready() -> void:
 	_build_slots()
 	_build_right_info(vs)
 	_build_log_and_help(vs)
+	_build_boss_bar(vs)
 	_build_complete(vs)
 
 func _build_resource_card() -> void:
@@ -183,6 +189,26 @@ func _build_log_and_help(vs: Vector2) -> void:
 	_make_rect(Vector2(0.0, vs.y - 34.0), Vector2(vs.x, 34.0), Color(0.05, 0.05, 0.08, 0.64))
 	var help_label := _make_label(Vector2(14, vs.y - 29.0), FONT_SIZE_HELP, Color(0.80, 0.80, 0.76))
 	help_label.text = HELP_TEXT
+
+func _build_boss_bar(vs: Vector2) -> void:
+	var bx := (vs.x - BOSS_BAR_W - 24.0) * 0.5
+	var by := 120.0
+	_boss_bg = _make_rect(Vector2(bx, by), Vector2(BOSS_BAR_W + 24.0, 48.0), Color(0.08, 0.05, 0.06, 0.84))
+	_boss_label = _make_label(Vector2(bx + 12.0, by + 3.0), 18, Color(0.98, 0.88, 0.72))
+	_boss_label.text = "旱魃"
+	_boss_track = _make_rect(Vector2(bx + 12.0, by + 27.0), Vector2(BOSS_BAR_W, 13.0), BAR_TRACK)
+	_boss_fill = _make_rect(Vector2(bx + 12.0, by + 27.0), Vector2(BOSS_BAR_W, 13.0), Color(0.88, 0.28, 0.16))
+	_set_boss_visible(false)
+
+func _set_boss_visible(v: bool) -> void:
+	if _boss_bg != null:
+		_boss_bg.visible = v
+	if _boss_track != null:
+		_boss_track.visible = v
+	if _boss_fill != null:
+		_boss_fill.visible = v
+	if _boss_label != null:
+		_boss_label.visible = v
 
 func _build_complete(vs: Vector2) -> void:
 	_complete_bg = _make_rect(Vector2(0.0, vs.y * 0.5 - 92.0), Vector2(vs.x, 184.0), Color(0.05, 0.08, 0.06, 0.82))
@@ -303,6 +329,26 @@ func update_state(state: Dictionary) -> void:
 		_mat_label.text = String(state.get("cursor_mat", "—"))
 	if _exit_label != null:
 		_exit_label.text = String(state.get("exit_hint", ""))
+
+	var boss_raw: Variant = state.get("boss")
+	if boss_raw is Dictionary and bool((boss_raw as Dictionary).get("visible", false)):
+		var bd: Dictionary = boss_raw
+		var bhp: float = float(bd.get("hp", 0.0))
+		var bmax: float = maxf(float(bd.get("max_hp", 1.0)), 1.0)
+		var bphase: int = int(bd.get("phase", 1))
+		var bwet: bool = bool(bd.get("wet", false))
+		var bname: String = String(bd.get("name", "旱魃"))
+		var tag := ""
+		if bphase >= 2:
+			tag += " · 旱威"
+		if bwet:
+			tag += " · 湿破甲"
+		_set_boss_visible(true)
+		_boss_label.text = "%s%s   %d/%d" % [bname, tag, roundi(bhp), roundi(bmax)]
+		_boss_fill.size.x = BOSS_BAR_W * clampf(bhp / bmax, 0.0, 1.0)
+		_boss_fill.color = Color(0.28, 0.62, 0.94) if bwet else (Color(0.96, 0.22, 0.14) if bphase >= 2 else Color(0.88, 0.30, 0.18))
+	else:
+		_set_boss_visible(false)
 
 	var statuses: Array = state.get("statuses", [])
 	for j in range(_status_bgs.size()):

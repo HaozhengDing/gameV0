@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-21 | [2026-11-21-11-m1-06-enemies-boss-and-jump-p0.md](2026-11-21-11-m1-06-enemies-boss-and-jump-p0.md) | 更新 + 决策 | 详细 | M1-06 落地（矿井一层 5 种敌人 AI、旱魃两阶段 BOSS 战与泼水破甲、BOSS 血条与掉落）+ 跳跃跟手 P0 + 修复 event_bus 字段透传与 BOSS 房水坝；抵达 M1-α 检查点 |
 | 2026-11-21 | [2026-11-21-10-antigravity-decision-skill.md](2026-11-21-10-antigravity-decision-skill.md) | 更新 | 详细 | Antigravity Gemini 与 DeepSeek Harness 从 `.agents/skills/` 加载同一个游戏开发决策调研技能 |
 | 2026-11-21 | [2026-11-21-09-review-new-proposals-and-next-order.md](2026-11-21-09-review-new-proposals-and-next-order.md) | 评审 + 建议 | 摘要 | 评审跳跃跟手/环境表现层/打击感三份新文档：建议主攻 M1-06，仅顺手带跳跃 P0，环境表现留 M1-11/M2、打击感保留现版 |
 | 2026-11-21 | [2026-11-21-08-game-decision-research-skill.md](2026-11-21-08-game-decision-research-skill.md) | 建议 + 更新 | 详细 | DeepSeek Harness 项目技能，跨平台取证、方案卡与本作 A/B，首例为 M1-10 打击感 |

@@ -51,17 +51,26 @@ func publish(evt_type: String, tick: int, fields: Dictionary = {}) -> Dictionary
 		push_error("C-EVT: 未知事件类型 " + evt_type)
 		return {}
 	_seq += 1
+	var actor_str: String = String(fields.get("actor", fields.get("source_id", "")))
+	var target_str: String = String(fields.get("target", fields.get("target_id", "")))
+	var dtype_str: String = String(fields.get("damage_type", ""))
+	var status_str: String = String(fields.get("status", ""))
+	var aux_str: String = String(fields.get("aux", dtype_str if not dtype_str.is_empty() else status_str))
 	var env: Dictionary = {
 		"seq": _seq,
 		"tick": tick,
 		"type": evt_type,
 		"pos": fields.get("pos", Vector2i(-1, -1)),
-		"actor": String(fields.get("actor", "")),
-		"target": String(fields.get("target", "")),
+		"actor": actor_str,
+		"target": target_str,
+		"source_id": actor_str,
+		"target_id": target_str,
+		"damage_type": dtype_str,
+		"status": status_str,
 		"material": String(fields.get("material", "")),
 		"reaction_id": String(fields.get("reaction_id", "")),
 		"value": float(fields.get("value", 0.0)),
-		"aux": String(fields.get("aux", "")),
+		"aux": aux_str,
 		"text_key": String(fields.get("text_key", "")),
 	}
 	_history.append(env)

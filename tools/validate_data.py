@@ -636,6 +636,75 @@ def validate_texts(material_by_id, reaction_ids, talisman_ids):
             err(f"{rel}: 缺少符卡 {cid} 的文本键 {ck}")
 
     print(f"texts: {len(entries)} 条（C-TEXT v0.1）")
+    return set(entries.keys())
+
+
+def validate_entities(material_ids, talisman_ids, text_keys):
+    """M1-06 敌人数据校验：检查 data/entities/*.json 的血量、标签、文本键、掉落引用及与 biome 实体对齐。"""
+    ent_dir = ROOT / "data" / "entities"
+    if not ent_dir.exists():
+        return set()
+    seen = set()
+    valid_tiers = {"mob", "elite", "boss"}
+    valid_moves = {"ground", "fly", "boss"}
+    for p in sorted(ent_dir.glob("*.json")):
+        rel = str(p.relative_to(ROOT))
+        data = load_json(rel)
+        if data is None:
+            continue
+        if data.get("schema") != "gamev0.entities/v0.1":
+            err(f"{rel}: schema 应为 gamev0.entities/v0.1")
+        ents = data.get("entities")
+        if not isinstance(ents, list) or not ents:
+            err(f"{rel}: entities 必须是非空数组")
+            continue
+        for i, e in enumerate(ents):
+            if not isinstance(e, dict):
+                err(f"{rel}: entities[{i}] 不是对象")
+                continue
+            eid = e.get("id")
+            if not isinstance(eid, str) or not eid:
+                err(f"{rel}: entities[{i}] 缺少 id")
+                continue
+            if eid in seen:
+                err(f"{rel}: 重复实体 id {eid}")
+            seen.add(eid)
+            nk = e.get("name_key")
+            if not isinstance(nk, str) or nk not in text_keys:
+                err(f"{rel}.{eid}: name_key {nk!r} 不在 C-TEXT 词表中")
+            if e.get("tier") not in valid_tiers:
+                err(f"{rel}.{eid}: tier 非法: {e.get('tier')!r}")
+            if e.get("move_mode") not in valid_moves:
+                err(f"{rel}.{eid}: move_mode 非法: {e.get('move_mode')!r}")
+            for nf in ("hp", "damage", "half_w", "height"):
+                v = e.get(nf)
+                if not isinstance(v, (int, float)) or isinstance(v, bool) or v <= 0:
+                    err(f"{rel}.{eid}: {nf} 必须是正数")
+            drop = e.get("drop") or {}
+            if isinstance(drop, dict):
+                for dm in drop.get("materials", []):
+                    if dm not in material_ids:
+                        err(f"{rel}.{eid}: drop.materials 引用了未定义物质 {dm!r}")
+                dt = drop.get("talisman")
+                if dt is not None and dt not in talisman_ids:
+                    err(f"{rel}.{eid}: drop.talisman 引用了未定义符卡 {dt!r}")
+        # 交叉校验所属 biome 的 spawn_table 实体全部覆盖
+        biome_id = data.get("biome_id")
+        if isinstance(biome_id, str) and biome_id:
+            bp = ROOT / "data" / "biomes" / f"{biome_id}.json"
+            if bp.exists():
+                bdata = load_json(str(bp.relative_to(ROOT))) or {}
+                st = bdata.get("spawn_table") or {}
+                for grp in ("mobs", "elites"):
+                    for item in st.get(grp, []) or []:
+                        ref_e = item.get("entity") if isinstance(item, dict) else None
+                        if ref_e and ref_e not in seen:
+                            err(f"{rel}: 未覆盖 biome {biome_id} 引用的实体 {ref_e}")
+                boss = st.get("boss")
+                if isinstance(boss, dict) and boss.get("entity") and boss["entity"] not in seen:
+                    err(f"{rel}: 未覆盖 biome {biome_id} 引用的 BOSS 实体 {boss['entity']}")
+    print(f"entities: {len(seen)} 种敌人")
+    return seen
 
 
 def validate_wands(talisman_ids):
@@ -722,7 +791,8 @@ def main():
     validate_cards()
     talisman_ids = validate_talismans(material_ids) or set()
     validate_wands(talisman_ids)
-    validate_texts(material_by_id, reaction_ids, talisman_ids)
+    text_keys = validate_texts(material_by_id, reaction_ids, talisman_ids) or set()
+    validate_entities(material_ids, talisman_ids, text_keys)
     validate_vm_cases()
 
     print(f"materials: {len(material_ids)} | reactions: {len(reaction_ids)} | rooms: {len(room_map)}")

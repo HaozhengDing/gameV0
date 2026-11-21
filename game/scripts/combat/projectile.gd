@@ -16,6 +16,7 @@ var radius: float = 1.5              # 实体命中半径（cells）
 
 var damage: float = 0.0
 var damage_type: String = "none"
+var lantern_damage: float = 0.0
 var element: String = "none"
 var pierce_left: int = 0
 var ttl_ticks: int = 120
@@ -41,6 +42,7 @@ func init_from_action(action: Dictionary, origin: Vector2, dir: Vector2, p_owner
 	gravity = float(action.get("gravity", 0.0))
 	damage = float(action.get("damage", 0.0))
 	damage_type = String(action.get("damage_type", "none"))
+	lantern_damage = float(action.get("lantern_damage", 0.0))
 	element = String(action.get("element", "none"))
 	pierce_left = maxi(int(action.get("pierce", 0)), 0)
 	ttl_ticks = maxi(int(action.get("ttl_ticks", 120)), 1)
