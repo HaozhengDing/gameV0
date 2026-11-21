@@ -31,6 +31,7 @@ var player
 var hud
 var event_bus
 var text_db
+var combat
 
 # 葫芦 / 盏 / 实体状态 / 施法反馈
 var gourd_water := 0
@@ -55,7 +56,7 @@ var mat_oil := 4
 var mat_fire := 6
 var mat_toxic_smoke := 17
 
-func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud, p_event_bus = null, p_text_db = null) -> void:
+func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud, p_event_bus = null, p_text_db = null, p_combat = null) -> void:
 	sim = p_sim
 	vm = p_vm
 	level = p_level
@@ -63,6 +64,7 @@ func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud, 
 	hud = p_hud
 	event_bus = p_event_bus
 	text_db = p_text_db
+	combat = p_combat
 	_cache_material_ids()
 
 func _cache_material_ids() -> void:
@@ -369,22 +371,22 @@ func is_in_toxic_smoke(center: Vector2i) -> bool:
 				return true
 	return false
 
-# ------------------------------------------------------------------ C-ACT 执行（§3.1）
+# ------------------------------------------------------------------ C-ACT 执行（M1-02 真实投射物与战斗）
 
-## 施放符组并执行返回的 C-ACT 动作；返回本发动作对世界的影响统计（smoke 断言用）。
+## 施放符组并通过 CombatManager 发射真实投射物或执行即时动作；返回发射统计。
 func cast(group_id: String, aim: Vector2i) -> Dictionary:
 	var summary := {
 		"accepted": false,
 		"reject_reason": "",
 		"actions": 0,
+		"projectiles": 0,
 		"dug": 0,
 		"converted": 0,
 		"converted_to_water": 0,
 		"ignited": 0,
 		"spawned": 0,
-		"noop": [],
 	}
-	if sim == null or vm == null:
+	if sim == null or vm == null or combat == null:
 		return summary
 	var result: Dictionary = vm.cast_group(group_id)
 	var accepted: bool = bool(result.get("accepted", false))
@@ -397,29 +399,36 @@ func cast(group_id: String, aim: Vector2i) -> Dictionary:
 			_log(last_cast_status)
 		return summary
 	var events: Array = result.get("events", [])
+	var tick: int = sim.get_tick() if sim.has_world() else 0
 	if events.has("fizzle_no_spirit"):
 		last_cast_status = "法力不足"
+		if event_bus != null:
+			event_bus.publish("spell_fizzle", tick, {"source_id": "player", "group_id": group_id, "reason": "no_spirit"})
 		_log(last_cast_status)
 		return summary
 	var actions: Array = result.get("actions", [])
 	summary["actions"] = actions.size()
-	for action in actions:
-		if action is Dictionary:
-			var action_dict: Dictionary = action
-			_execute_action(action_dict, aim, summary, 0)
-	var converted_water: int = int(summary["converted_to_water"])
-	var ignited: int = int(summary["ignited"])
-	var dug: int = int(summary["dug"])
-	var noops: Array = summary["noop"]
-	if ignited > 0:
-		_log("点燃 %d" % ignited)
-	if dug > 0:
-		_log("挖掘 %d" % dug)
-	if converted_water > 0:
-		combo_water_converted += converted_water
-		_log("化水成功 %d" % converted_water)
-	if converted_water == 0 and ignited == 0 and dug == 0 and int(summary["spawned"]) == 0 and not noops.is_empty():
-		_log("无敌人目标")
+	var origin := Vector2(float(aim.x), float(aim.y))
+	var dir := _player_facing()
+	if player != null:
+		var pc: Vector2i = player.cell_pos()
+		origin = Vector2(float(pc.x), float(maxi(pc.y - SPRAY_ORIGIN_OFFSET_Y, 0)))
+		var delta := Vector2(float(aim.x) - origin.x, float(aim.y) - origin.y)
+		if delta.length() > 0.01:
+			dir = delta.normalized()
+	if event_bus != null:
+		event_bus.publish("spell_cast", tick, {
+			"source_id": "player", "group_id": group_id,
+			"pos": Vector2i(floori(origin.x), floori(origin.y)),
+			"value": float(actions.size()),
+		})
+	var exec_res: Dictionary = combat.execute_actions(actions, origin, dir, "player", "player")
+	summary["projectiles"] = int(exec_res.get("projectiles", 0))
+	summary["dug"] = int(exec_res.get("dug", 0))
+	summary["converted"] = int(exec_res.get("converted", 0))
+	summary["converted_to_water"] = int(exec_res.get("converted_to_water", 0))
+	summary["ignited"] = int(exec_res.get("ignited", 0))
+	summary["spawned"] = int(exec_res.get("spawned", 0))
 	last_cast_status = "ok"
 	return summary
 
@@ -436,126 +445,11 @@ func _reason_cn(reason: String) -> String:
 		_:
 			return reason
 
-func _execute_action(action: Dictionary, aim: Vector2i, summary: Dictionary, depth: int) -> void:
-	if depth > MAX_ACTION_DEPTH:
-		return
-	var op: String = String(action.get("op", ""))
-	match op:
-		"spawn_projectile":
-			# T4b：不做投射物实体，在瞄准点即时命中 —— 先 payloads，再 trigger.actions
-			for payload in _as_array(action.get("payloads", [])):
-				if payload is Dictionary:
-					var payload_dict: Dictionary = payload
-					_execute_action(payload_dict, aim, summary, depth + 1)
-			var trigger: Variant = action.get("trigger")
-			if trigger is Dictionary:
-				var trigger_dict: Dictionary = trigger
-				for payload in _as_array(trigger_dict.get("actions", [])):
-					if payload is Dictionary:
-						var trigger_payload: Dictionary = payload
-						_execute_action(trigger_payload, aim, summary, depth + 1)
-			return
-		"explode":
-			var radius: int = int(action.get("radius", 20))
-			summary["dug"] = int(summary["dug"]) + sim.dig(aim.x, aim.y, radius)
-			# 挖坑后可燃固体/粉末已被清出半径内，外扩 EXPLODE_IGNITE_MARGIN 以点燃坑缘煤/硫/竹木
-			_ignite_around(aim, radius + EXPLODE_IGNITE_MARGIN, summary)
-			return
-		"ignite":
-			_ignite_around(aim, IGNITE_RADIUS, summary)
-			return
-		"convert_material":
-			_convert_around(aim, int(action.get("radius", 1)), String(action.get("to", "")), summary)
-			return
-		"dig":
-			summary["dug"] = int(summary["dug"]) + sim.dig(aim.x, aim.y, int(action.get("radius", 2)))
-			return
-		"spawn_material":
-			_spawn_material_around(aim, int(action.get("radius", 1)), String(action.get("material", "")), summary)
-			return
-		"refund_spirit":
-			# VM 已内部结算（talisman-vm-spec §3.2），世界层忽略
-			return
-		"phantom_cast":
-			# 幻符动作按同一规则递归：先 effect，再 payloads
-			var effect: Variant = action.get("effect")
-			if effect is Dictionary:
-				var effect_dict: Dictionary = effect
-				_execute_action(effect_dict, aim, summary, depth + 1)
-			for payload in _as_array(action.get("payloads", [])):
-				if payload is Dictionary:
-					var phantom_payload: Dictionary = payload
-					_execute_action(phantom_payload, aim, summary, depth + 1)
-			return
-		_:
-			# T4b 无敌人/状态：damage/apply_status/drain_life/extinguish_lantern/barrier/
-			# purify/spawn_cloud/grant_temp_slot 一律 no-op + print（T4B.md §3.1）
-			_noop(op, summary)
-
 func _ignite_around(center: Vector2i, radius: int, summary: Dictionary) -> void:
 	var r := maxi(radius, 0)
 	var affected: int = sim.apply_heat_burst(center.x, center.y, r, HEAT_BURST_TEMP)
 	if affected > 0:
 		summary["ignited"] = int(summary["ignited"]) + affected
-
-## convert_material：瞄准点 radius 内「非静态、非空」的格转为目标材质（静态岩层不动）。
-func _convert_around(center: Vector2i, radius: int, to_name: String, summary: Dictionary) -> void:
-	var target: int = sim.material_id(to_name)
-	if target < 0:
-		_noop("convert_material(to=%s 不在 C-SIM v2)" % to_name, summary)
-		return
-	var r := maxi(radius, 0)
-	var converted := 0
-	for dy in range(-r, r + 1):
-		for dx in range(-r, r + 1):
-			if dx * dx + dy * dy > r * r:
-				continue
-			var x := center.x + dx
-			var y := center.y + dy
-			var m: int = sim.get_cell(x, y)
-			if m == mat_empty or m == target:
-				continue
-			var state: int = sim.get_material_state(m)
-			if state < 0 or state == 4:   # 4 = SIM_STATE_STATIC
-				continue
-			sim.set_cell(x, y, target)
-			converted += 1
-	if converted > 0:
-		summary["converted"] = int(summary["converted"]) + converted
-		if target == mat_water:
-			summary["converted_to_water"] = int(summary["converted_to_water"]) + converted
-
-## spawn_material：形状 pool/solid 简化为圆形填充；只接受 C-SIM v2 有的材质。
-func _spawn_material_around(center: Vector2i, radius: int, mat_name: String, summary: Dictionary) -> void:
-	var target: int = sim.material_id(mat_name)
-	if target < 0:
-		_noop("spawn_material(%s 不在 C-SIM v2)" % mat_name, summary)
-		return
-	var r := maxi(radius, 1)
-	var spawned := 0
-	for dy in range(-r, r + 1):
-		for dx in range(-r, r + 1):
-			if dx * dx + dy * dy > r * r:
-				continue
-			var x := center.x + dx
-			var y := center.y + dy
-			if x < 0 or y < 0 or x >= sim.get_world_width() or y >= sim.get_world_height():
-				continue
-			if sim.get_cell(x, y) == mat_empty:
-				sim.set_cell(x, y, target)
-				spawned += 1
-	summary["spawned"] = int(summary["spawned"]) + spawned
-
-func _noop(op: String, summary: Dictionary) -> void:
-	print("T4B_ACTION_NOOP op=" + op)
-	var list: Array = summary["noop"]
-	list.append(op)
-
-func _as_array(value: Variant) -> Array:
-	if value is Array:
-		var array_value: Array = value
-		return array_value
-	return []
 
 func _log(text: String) -> void:
 	if hud != null:

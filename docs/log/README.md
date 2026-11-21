@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-20 | [2026-11-20-09-m1-02-projectiles-and-combat.md](2026-11-20-09-m1-02-projectiles-and-combat.md) | 更新 | 详细 | M1-02 落地：真实投射物飞行/穿透/触发树、全 16 种 C-ACT 零 NOOP、战斗实体与 8/8 民俗反应全通 |
 | 2026-11-20 | [2026-11-20-08-m1-12-csim-v3-reactions.md](2026-11-20-08-m1-12-csim-v3-reactions.md) | 更新 | 详细 | M1-12 落地：C-SIM v3（19 材质/5 格层反应/热火引擎/10k 压测 burn-worst p95 0.82ms）+ GDExtension/EventBus/实体灼烧湿润毒烟状态接入 |
 | 2026-11-20 | [2026-11-20-07-m1-plan-final-and-m1-01-frozen.md](2026-11-20-07-m1-plan-final-and-m1-01-frozen.md) | 决策 + 更新 | 详细 | M1 计划 5 项全拍板生效（含完整 Wang Tile）；M1-01（C-EVT/C-TEXT v0.1）冻结并落地词表、CI 机检与运行时骨架 |
 | 2026-11-20 | [2026-11-20-06-m1-plan-and-contracts-draft.md](2026-11-20-06-m1-plan-and-contracts-draft.md) | 决策 + 建议 | 详细 | M0 conditional 放行：起草 M1 计划（04-m1-plan）与 M1-01 契约（C-EVT / C-TEXT v0.1 草案） |

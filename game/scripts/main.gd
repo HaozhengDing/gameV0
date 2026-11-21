@@ -26,6 +26,7 @@ const HudScript := preload("res://scripts/hud.gd")
 const OverlayScript := preload("res://scripts/overlay.gd")
 const EventBusScript := preload("res://scripts/event_bus.gd")
 const TextDBScript := preload("res://scripts/text_db.gd")
+const CombatManagerScript := preload("res://scripts/combat/combat_manager.gd")
 
 const REACTION_TEXT_KEYS := {
 	"r-black-powder": "$react_black_powder",
@@ -33,6 +34,9 @@ const REACTION_TEXT_KEYS := {
 	"r-bamboo-burn": "$react_bamboo_burn",
 	"r-lime-steam": "$react_lime_steam",
 	"r-rice-purify": "$react_rice_purify",
+	"r-dog-blood-spirit": "$react_dog_blood_spirit",
+	"r-quicksilver-ward": "$react_quicksilver_ward",
+	"r-cinnabar-talisman": "$react_cinnabar_talisman",
 }
 const REACTION_LOG_COOLDOWN := 120  # 2s 同类反应 HUD 提示节流（60Hz）
 
@@ -47,6 +51,7 @@ var executor
 var overlay
 var event_bus
 var text_db
+var combat
 var exit_marker: ColorRect
 
 # 玩法状态
@@ -98,6 +103,7 @@ func _setup() -> void:
 	_create_vm()
 	_create_hud()
 	hud.set_slots(group_names, group_costs)
+	_create_combat()
 	_create_executor()
 	_start_round()
 	if smoke_mode or shot_mode:
@@ -134,6 +140,8 @@ func _physics_process(delta: float) -> void:
 func _tick_once() -> void:
 	sim.step_tick()
 	_drain_sim_events()
+	if combat != null:
+		combat.step_tick()
 	vm.tick_advance()
 	level.tick_fire_wall()
 	if completed:
@@ -346,9 +354,16 @@ func _create_hud() -> void:
 	hud.name = "HUD"
 	add_child(hud)
 
+func _create_combat() -> void:
+	combat = CombatManagerScript.new()
+	combat.name = "CombatManager"
+	combat.z_index = 4
+	add_child(combat)
+	combat.setup(sim, event_bus, text_db, overlay, hud)
+
 func _create_executor() -> void:
 	executor = ExecutorScript.new()
-	executor.setup(sim, vm, level, player, hud, event_bus, text_db)
+	executor.setup(sim, vm, level, player, hud, event_bus, text_db, combat)
 
 func _start_round() -> void:
 	completed = false
@@ -356,14 +371,57 @@ func _start_round() -> void:
 	_reaction_log_tick.clear()
 	if event_bus != null:
 		event_bus.reset()
+		event_bus.subscribe(_on_combat_event)
 	if not level.build():
 		push_error("T4B: level.build 失败")
 	player.setup(sim)
 	player.set_cell_pos(LevelScript.START_CELL)
 	player.reset_motion()
+	if combat != null:
+		combat.reset_round()
+		_spawn_demo_targets()
 	executor.reset_round()
 	vm.reset()
 	_last_view = Vector2i(-999999, -999999)
+
+func _spawn_demo_targets() -> void:
+	# M1-02 靶标实体（实机可试射；正式敌人 AI 在 M1-06 接入）
+	combat.spawn_entity({
+		"id": "mob_ghost_01",
+		"name": text_db.get_text("$enemy_coal_ghost") if text_db != null else "矿鬼",
+		"faction": "enemy",
+		"pos": Vector2(184.0, 355.0),
+		"max_hp": 30.0,
+		"tags": ["spirit"],
+		"weak_to": {"阳": 2.0, "火": 1.2},
+		"color": Color(0.54, 0.72, 0.88),
+	})
+	combat.spawn_entity({
+		"id": "mob_eldritch_01",
+		"name": text_db.get_text("$enemy_earth_worm") if text_db != null else "土蝼",
+		"faction": "enemy",
+		"pos": Vector2(740.0, 355.0),
+		"max_hp": 45.0,
+		"tags": ["eldritch"],
+		"weak_to": {"金": 1.5, "雷": 1.5},
+		"color": Color(0.72, 0.36, 0.70),
+	})
+
+func _on_combat_event(ev: Dictionary) -> void:
+	if hud == null or smoke_mode:
+		return
+	var etype: String = String(ev.get("type", ""))
+	if etype == "entity_killed":
+		var tid: String = String(ev.get("target_id", ""))
+		var ent = combat.get_entity(tid) if combat != null else null
+		var label: String = ent.display_name if ent != null else tid
+		hud.log_event("击杀 " + label)
+	elif etype == "reaction_triggered":
+		var rid: String = String(ev.get("reaction_id", ""))
+		if rid in ["r-dog-blood-spirit", "r-quicksilver-ward", "r-cinnabar-talisman"]:
+			var tk: String = String(ev.get("text_key", ""))
+			if text_db != null and not tk.is_empty():
+				hud.log_event(text_db.get_text(tk))
 
 # ================================================================== 输入
 
@@ -430,23 +488,7 @@ func _do_cast(aim: Vector2i) -> void:
 	if group_ids.is_empty():
 		return
 	var gid := String(group_ids[selected_group])
-	var summary: Dictionary = executor.cast(gid, aim)
-	if overlay != null and bool(summary.get("accepted", false)):
-		var r := 4.0
-		var col := Color(0.96, 0.86, 0.45, 0.9)
-		if gid == "F-0001":
-			r = 20.0
-			col = Color(1.0, 0.55, 0.22, 0.85)
-		elif gid == "F-0002":
-			r = 4.0
-			col = Color(0.36, 0.84, 1.0, 0.95)
-		elif gid == "F-0003":
-			r = 5.0
-			col = Color(0.68, 0.52, 0.98, 0.85)
-		elif gid == "F-0004":
-			r = 3.0
-			col = Color(0.88, 0.78, 0.52, 0.9)
-		overlay.add_ring(aim, r, col)
+	executor.cast(gid, aim)
 	_refresh_hud()
 
 func _select_group(index: int) -> void:
@@ -593,18 +635,22 @@ func _run_smoke() -> void:
 	if group_ids.size() < 4:
 		fail = "符组数量 %d < 4（data/talismans.json 没读对？）" % group_ids.size()
 
-	# 1) 化水：F-0002（毕方火·化·水）打 room-01 水银池 -> quicksilver 变 water
-	var aim: Vector2i = LevelScript.MERCURY_AIM_CELL
-	var quick_before := _count_material(aim, 4, sim.material_id("quicksilver"))
-	var water_before := _count_material(aim, 4, sim.material_id("water"))
+	# 1) 化水：站水银池上方用真实投射物 F-0002（火 + 化水）命中水银液面 -> quicksilver 变 water
+	var aim := Vector2i(304, 244)  # room-01 水银池顶部液面（row 6 = y 244）
+	var quick_before := _count_material(aim, 6, sim.material_id("quicksilver"))
+	var water_before := _count_material(aim, 6, sim.material_id("water"))
 	var fire_before: int = level.count_fire_near_barrier()
 	if fail == "":
-		var r2: Dictionary = executor.cast("F-0002", aim)
+		player.set_cell_pos(Vector2i(304, 232))
+		var r2: Dictionary = executor.cast("F-0002", Vector2i(304, 250))
 		if not bool(r2.get("accepted", false)):
 			fail = "F-0002 未受理：%s" % String(r2.get("reject_reason", ""))
+		elif int(r2.get("projectiles", 0)) <= 0:
+			fail = "F-0002 未发射真实投射物"
 		else:
-			var quick_after := _count_material(aim, 4, sim.material_id("quicksilver"))
-			var water_after := _count_material(aim, 4, sim.material_id("water"))
+			_fast_forward(10)
+			var quick_after := _count_material(aim, 6, sim.material_id("quicksilver"))
+			var water_after := _count_material(aim, 6, sim.material_id("water"))
 			if quick_after >= quick_before:
 				fail = "化水失败：水银 %d 格没有减少（%d -> %d）" % [quick_before, quick_before, quick_after]
 			elif water_after <= water_before:
@@ -612,7 +658,7 @@ func _run_smoke() -> void:
 			elif not hud.log_contains("化水成功"):
 				fail = "HUD 事件日志缺少「化水成功」"
 			else:
-				print("T4B_SMOKE_STEP 化水 quicksilver %d->%d water %d->%d" % [
+				print("T4B_SMOKE_STEP 化水(投射物) quicksilver %d->%d water %d->%d" % [
 					quick_before, quick_after, water_before, water_after
 				])
 
@@ -656,38 +702,56 @@ func _run_smoke() -> void:
 		else:
 			print("T4B_SMOKE_STEP 通关 completed=%s" % str(completed))
 
-	# 5) 4 组符都能受理并影响世界（每发之间快进 35 tick 过回符）
+	# 5) 4 组符真实投射物飞行 + 命中验证（每发之间快进 35 tick 过回符）
 	if fail == "":
 		_fast_forward(35)
-		var r1: Dictionary = executor.cast("F-0001", Vector2i(200, 430))
+		var dug_before1: int = int(combat.stats["dug"])
+		player.set_cell_pos(Vector2i(200, 350))
+		var r1: Dictionary = executor.cast("F-0001", Vector2i(200, 375))
+		_fast_forward(12)
+		var dug_delta1: int = int(combat.stats["dug"]) - dug_before1
 		if not bool(r1.get("accepted", false)):
 			fail = "F-0001 未受理"
+		elif dug_delta1 <= 0:
+			fail = "F-0001 投射物爆炸没有挖开岩层"
 		else:
-			dug_total += int(r1.get("dug", 0))
-			if dug_total <= 0:
-				fail = "F-0001 爆炸没有挖开岩层"
+			dug_total += dug_delta1
 	if fail == "":
 		_fast_forward(35)
+		var dug_before4: int = int(combat.stats["dug"])
 		var spirit_before: float = vm.get_spirit()
-		var r4: Dictionary = executor.cast("F-0004", Vector2i(500, 430))
+		player.set_cell_pos(Vector2i(500, 270))
+		var r4: Dictionary = executor.cast("F-0004", Vector2i(500, 285))
 		var spirit_after: float = vm.get_spirit()
+		_fast_forward(12)
+		var dug_delta4: int = int(combat.stats["dug"]) - dug_before4
 		if not bool(r4.get("accepted", false)):
 			fail = "F-0004 未受理"
-		elif int(r4.get("dug", 0)) <= 0:
-			fail = "F-0004 土遁没有挖开岩层"
+		elif dug_delta4 <= 0:
+			fail = "F-0004 土遁投射物没有挖开岩层"
 		elif absf((spirit_before - spirit_after) - 2.0) > 0.01:
 			fail = "F-0004 净耗不是 2（%.1f -> %.1f，归 应返还 8）" % [spirit_before, spirit_after]
 		else:
-			dug_total += int(r4.get("dug", 0))
+			dug_total += dug_delta4
 	if fail == "":
 		_fast_forward(35)
+		var ghost = combat.get_entity("mob_ghost_01")
+		var ghost_hp0: float = ghost.hp if ghost != null else 0.0
 		var spirit_before3: float = vm.get_spirit()
-		var r3: Dictionary = executor.cast("F-0003", Vector2i(700, 430))
+		player.set_cell_pos(Vector2i(215, 355))
+		var r3: Dictionary = executor.cast("F-0003", Vector2i(184, 350))
 		var spirit_after3: float = vm.get_spirit()
+		_fast_forward(15)
 		if not bool(r3.get("accepted", false)):
 			fail = "F-0003 未受理"
 		elif spirit_after3 > spirit_before3 - 19.0:
 			fail = "F-0003 没有扣 20 灵力（%.1f -> %.1f，可能灵力不足 fizzle）" % [spirit_before3, spirit_after3]
+		elif ghost == null or ghost.hp >= ghost_hp0 or not ghost.is_stunned():
+			fail = "F-0003（阴+镇）未命中矿鬼或未施加镇压（hp=%.1f/%.1f stun=%s）" % [
+				ghost.hp if ghost != null else -1.0, ghost_hp0, str(ghost.is_stunned() if ghost != null else false)
+			]
+		else:
+			print("T4B_SMOKE_STEP F-0003阴+镇命中矿鬼 hp=%.1f->%.1f stun=true" % [ghost_hp0, ghost.hp])
 
 	# 6) T4b 打磨回归：地板高度出口 / 喷油不灭火 / 火伤贴脸判定 / 手动点火 + 可燃材质统一蔓延
 	if fail == "":
@@ -732,21 +796,23 @@ func _run_smoke() -> void:
 					bamboo_before, bamboo_after, coal_before, coal_after
 				])
 	if fail == "":
-		# 爆炸坑缘热冲击：F-0001 命中 room-02 硫磺块 -> 挖坑后引燃坑缘并产生硫磺毒烟
-		var sulfur_aim := Vector2i(632, 228)
-		_active_rect = Rect2i(600, 196, 64, 64)
+		# 爆炸坑缘热冲击：F-0001 投射物命中 room-02 硫磺块 -> 挖坑后引燃坑缘并产生硫磺毒烟
+		var sulfur_aim := Vector2i(612, 228)
+		_active_rect = Rect2i(580, 196, 80, 64)
 		sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
+		var ign_before: int = int(combat.stats["ignited"])
+		player.set_cell_pos(Vector2i(582, 232))
 		var r_rim: Dictionary = executor.cast("F-0001", sulfur_aim)
-		_drain_sim_events()
-		_fast_forward(20)
+		_fast_forward(28)
+		var ign_delta: int = int(combat.stats["ignited"]) - ign_before
 		var toxic_cnt := _count_material(sulfur_aim, 28, sim.material_id("toxic_smoke"))
-		if not bool(r_rim.get("accepted", false)) or int(r_rim.get("ignited", 0)) <= 0:
-			fail = "F-0001 爆炸未引燃坑缘硫磺（ignited=%d）" % int(r_rim.get("ignited", 0))
+		if not bool(r_rim.get("accepted", false)) or ign_delta <= 0:
+			fail = "F-0001 爆炸未引燃坑缘硫磺（ignited=%d）" % ign_delta
 		elif toxic_cnt <= 0:
 			fail = "硫磺受热未产生毒烟（toxic_smoke=0）"
 		else:
 			print("T4B_SMOKE_STEP 爆炸坑缘热冲击 sulfur ignited=%d toxic_smoke=%d" % [
-				int(r_rim.get("ignited", 0)), toxic_cnt
+				ign_delta, toxic_cnt
 			])
 
 	# 7) 角色物理移动回归：重力下落 / 浮空上升并消耗浮空条 / 落地快充 / 碎屑迈步
@@ -880,6 +946,98 @@ func _run_smoke() -> void:
 					sim.get_sim_version(), seen_reactions.size(), steam_cnt, rice_cnt
 				])
 
+	# 10) M1-02 战斗与投射物全回归：穿透 pierce / weak_to / on_hit+on_expire 触发树 / drain_life / 3 条实体标签反应
+	if fail == "":
+		event_bus.reset()
+		var m102_reacts: Dictionary = {}
+		var m102_cb := func(e: Dictionary) -> void:
+			if String(e.get("type", "")) == "reaction_triggered":
+				m102_reacts[String(e.get("reaction_id", ""))] = true
+		event_bus.subscribe(m102_cb)
+		# 清出一块干净战斗试验场（x 280..410, y 420..470）
+		for cy in range(420, 470):
+			for cx in range(280, 410):
+				sim.set_cell(cx, cy, 0)
+		# 10a) pierce=1 + weak_to：1 发阳属性穿透弹同时打穿 A(普通) 与 B(弱阳×2.0)
+		var ent_a = combat.spawn_entity({
+			"id": "smoke_a", "name": "靶A", "faction": "enemy",
+			"pos": Vector2(315.0, 455.0), "max_hp": 30.0, "tags": [], "weak_to": {},
+		})
+		var ent_b = combat.spawn_entity({
+			"id": "smoke_b", "name": "靶B", "faction": "enemy",
+			"pos": Vector2(345.0, 455.0), "max_hp": 50.0, "tags": ["spirit"], "weak_to": {"阳": 2.0},
+		})
+		var trig_before: int = int(combat.stats["triggers_fired"])
+		var healed_before: float = float(combat.stats["total_healed"])
+		combat.execute_actions([{
+			"op": "spawn_projectile", "spell": "body-flying-sword", "count": 1,
+			"damage": 10, "damage_type": "阳", "element": "金",
+			"pierce": 1, "speed": 12, "ttl_ticks": 40,
+			"payloads": [{"op": "drain_life", "amount": 4}],
+			"trigger": {"kind": "on_hit", "depth": 1, "actions": [
+				{"op": "damage", "amount": 5, "damage_type": "火"}
+			]},
+		}], Vector2(290.0, 450.0), Vector2.RIGHT, "player", "player")
+		# 10b) on_expire（奉·时）：空飞 5 tick 后到期生成水
+		combat.execute_actions([{
+			"op": "spawn_projectile", "spell": "body-tengsheng", "count": 1,
+			"damage": 0, "speed": 8, "ttl_ticks": 5,
+			"payloads": [],
+			"trigger": {"kind": "on_expire", "depth": 1, "actions": [
+				{"op": "spawn_material", "material": "water", "radius": 2}
+			]},
+		}], Vector2(295.0, 432.0), Vector2.RIGHT, "player", "player")
+		_fast_forward(20)
+		var expire_water := _count_material(Vector2i(310, 432), 8, sim.material_id("water"))
+		# A 应受：10(直伤)+4(drain_life)+5(on_hit) = 19 -> hp=11
+		# B 应受：10*2(弱阳直伤)+4(drain_life) = 24 -> hp=26（trigger 每发只触发一次）
+		var a_ok: bool = absf(ent_a.hp - 11.0) < 0.01
+		var b_ok: bool = absf(ent_b.hp - 26.0) < 0.01
+		var trig_ok: bool = (int(combat.stats["triggers_fired"]) - trig_before) >= 2
+		var heal_ok: bool = (float(combat.stats["total_healed"]) - healed_before) >= 8.0
+		if not a_ok or not b_ok:
+			fail = "M1-02 穿透/弱点结算异常（A hp=%.1f 期望11, B hp=%.1f 期望26）" % [ent_a.hp, ent_b.hp]
+		elif not trig_ok or expire_water <= 0:
+			fail = "M1-02 on_hit/on_expire 触发树异常（trigs=%d water=%d）" % [
+				int(combat.stats["triggers_fired"]) - trig_before, expire_water
+			]
+		elif not heal_ok:
+			fail = "M1-02 drain_life 吸血未生效（healed=%.1f）" % (float(combat.stats["total_healed"]) - healed_before)
+		else:
+			# 10c) 剩余 3 条实体标签反应（至此 8/8 反应全通）
+			# #6 r-dog-blood-spirit：黑狗血 × spirit -> 消耗血 + 20*2 阳伤
+			var ent_sp = combat.spawn_entity({
+				"id": "smoke_spirit", "name": "阴灵", "faction": "enemy",
+				"pos": Vector2(370.0, 455.0), "max_hp": 60.0, "tags": ["spirit"], "weak_to": {"阳": 2.0},
+			})
+			sim.set_cell_by_name(370, 452, "black_dog_blood")
+			# #7 r-quicksilver-ward：水银 × eldritch -> 阻挡且不消耗水银
+			var ent_el = combat.spawn_entity({
+				"id": "smoke_eldritch", "name": "旧日", "faction": "enemy",
+				"pos": Vector2(388.0, 455.0), "max_hp": 60.0, "tags": ["eldritch"],
+			})
+			sim.set_cell_by_name(392, 452, "quicksilver")
+			var qs_mat: int = sim.material_id("quicksilver")
+			var blocked: bool = ent_el.is_blocked_by_quicksilver(sim, Vector2(392.0, 455.0), sim.get_tick(), event_bus, qs_mat)
+			# #8 r-cinnabar-talisman：朱砂 × paper -> 消耗朱砂 + 临时符位 60s
+			var ent_pa = combat.spawn_entity({
+				"id": "smoke_paper", "name": "符纸", "faction": "player",
+				"pos": Vector2(400.0, 455.0), "max_hp": 20.0, "tags": ["paper"],
+			})
+			sim.set_cell_by_name(400, 452, "cinnabar")
+			_fast_forward(2)
+			event_bus.unsubscribe(m102_cb)
+			if not m102_reacts.has("r-dog-blood-spirit") or absf(ent_sp.hp - 20.0) > 0.01 or sim.get_cell(370, 452) != 0:
+				fail = "M1-12/02 r-dog-blood-spirit 异常（hp=%.1f cell=%d）" % [ent_sp.hp, sim.get_cell(370, 452)]
+			elif not blocked or not m102_reacts.has("r-quicksilver-ward") or sim.get_cell(392, 452) != qs_mat:
+				fail = "M1-12/02 r-quicksilver-ward 异常（blocked=%s cell=%d）" % [str(blocked), sim.get_cell(392, 452)]
+			elif not m102_reacts.has("r-cinnabar-talisman") or ent_pa.temp_slot_ticks <= 3500 or sim.get_cell(400, 452) != 0:
+				fail = "M1-12/02 r-cinnabar-talisman 异常（slot_ticks=%d cell=%d）" % [ent_pa.temp_slot_ticks, sim.get_cell(400, 452)]
+			else:
+				print("T4B_SMOKE_STEP M1-02战斗+3实体反应 pierce=ok weak_to=2x triggers=%d reacts_8of8=ok" % [
+					int(combat.stats["triggers_fired"]) - trig_before
+				])
+
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)
 		print("T4B_SMOKE_FAIL " + fail)
@@ -895,6 +1053,8 @@ func _fast_forward(tick_count: int) -> void:
 	for i in range(tick_count):
 		sim.step_tick()
 		_drain_sim_events()
+		if combat != null:
+			combat.step_tick()
 		vm.tick_advance()
 		level.tick_fire_wall()
 
