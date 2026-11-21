@@ -35,7 +35,9 @@ Sprite2D 属性照常用：`position`、`scale`、`texture_filter`。
 | `tick_advance()` | 每 sim tick 调一次：内部 tick+1、回灵 `regen/60` |
 | `reset()` | 灵力回满、tick/回符清零 |
 | `get_group_ids() -> Array[String]` / `get_groups() -> Array[Dictionary]` | 组列表（`{id,name,spirit_cost,segments}`） |
-| `cast_group(group_id:String) -> Dictionary` | 施法；返回见下 |
+| `cast_group(group_id:String) -> Dictionary` | 快捷符组施法（T4b 兼容）；返回见下 |
+| `cast_deck(wand:Dictionary, state:Dictionary={}, rng:Dictionary={}) -> Dictionary` | **M1-03**：完整 C-VM 真牌堆施法（真游标/成文与散符/多句/禁符反噬/幻影符） |
+| `get_all_cards() -> Array[Dictionary]` | **M1-03**：导出全部符卡元数据（`{id,segment,spirit_cost,forbidden,element}`） |
 | `get_spirit() -> float` / `get_spirit_max() -> float` | |
 | `get_tick() -> int` / `get_ready_at_tick() -> int` / `get_is_recharging() -> bool` | 回符状态 |
 

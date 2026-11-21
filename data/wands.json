@@ -1,0 +1,84 @@
+{
+  "schema": "gamev0.wands/v0.1",
+  "version": "0.1",
+  "updated": "2026-11-21",
+  "description": "M1-03 三把法器数据（对齐 S-0002 与 data/magic_numbers.json 线性定价；极简克制命名，遵循 refs/naming.md §5）。",
+  "wands": [
+    {
+      "id": "wand-peachwood",
+      "name": "桃木剑",
+      "ui_key": "$ui_wand_peachwood",
+      "ordered": true,
+      "slots": 4,
+      "spirit_max": 80,
+      "regen_per_sec": 10,
+      "sentences_per_cast": 1,
+      "recharge_ticks": 30,
+      "cast_interval_ticks": 12,
+      "price": 250,
+      "default_deck": [
+        "body-flying-sword",
+        "foot-sha",
+        "body-tudun",
+        "foot-hui"
+      ],
+      "note": "开局成文法器：4 符位，第 1 句斩+爆、第 2 句掘+归，游标交替推进。"
+    },
+    {
+      "id": "wand-bronze-bell",
+      "name": "铜铃",
+      "ui_key": "$ui_wand_bronze_bell",
+      "ordered": true,
+      "slots": 6,
+      "spirit_max": 110,
+      "regen_per_sec": 16,
+      "sentences_per_cast": 1,
+      "recharge_ticks": 36,
+      "cast_interval_ticks": 10,
+      "price": 320,
+      "default_deck": [
+        "head-chu-touch",
+        "body-flying-sword",
+        "body-bifang-huo",
+        "foot-hua-water",
+        "body-gui-huo",
+        "foot-zhen"
+      ],
+      "note": "成文高灵法器：6 符位，支持敕·触链式触发与化水组合。"
+    },
+    {
+      "id": "wand-bone-slip",
+      "name": "骨简",
+      "ui_key": "$ui_wand_bone_slip",
+      "ordered": false,
+      "slots": 5,
+      "spirit_max": 130,
+      "regen_per_sec": 14,
+      "sentences_per_cast": 2,
+      "recharge_ticks": 45,
+      "cast_interval_ticks": 16,
+      "price": 380,
+      "default_deck": [
+        "head-tiangang",
+        "body-flying-sword",
+        "foot-sha",
+        "body-bifang-huo",
+        "foot-shi"
+      ],
+      "note": "散符乱序法器：每轮洗牌、单次连念 2 句，爆发高但顺序不可控。"
+    }
+  ],
+  "starter_bag": [
+    "head-urgent-order",
+    "head-tiangang",
+    "head-chu-touch",
+    "head-feng-shi",
+    "head-fenshen",
+    "body-bifang-huo",
+    "body-tengsheng",
+    "foot-hua-water",
+    "foot-zhen",
+    "foot-shi",
+    "foot-hui"
+  ]
+}

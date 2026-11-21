@@ -635,6 +635,60 @@ def validate_texts(material_by_id, reaction_ids, talisman_ids):
     print(f"texts: {len(entries)} 条（C-TEXT v0.1）")
 
 
+def validate_wands(talisman_ids):
+    """M1-03 法器数据校验：检查 data/wands.json 的 3 把法器参数与 default_deck / starter_bag 符卡引用。"""
+    rel = "data/wands.json"
+    if not (ROOT / rel).exists():
+        warnings.append(f"{rel}: 文件不存在，跳过法器校验")
+        return set()
+    data = load_json(rel)
+    if data is None:
+        return set()
+    if data.get("schema") != "gamev0.wands/v0.1":
+        err(f"{rel}: schema 应为 gamev0.wands/v0.1")
+    wands = data.get("wands")
+    if not isinstance(wands, list) or not wands:
+        err(f"{rel}: wands 必须是非空数组")
+        return set()
+    seen = set()
+    for i, w in enumerate(wands):
+        if not isinstance(w, dict):
+            err(f"{rel}: wands[{i}] 不是对象")
+            continue
+        wid = w.get("id")
+        if not isinstance(wid, str) or not wid:
+            err(f"{rel}: wands[{i}] 缺少 id")
+            continue
+        if wid in seen:
+            err(f"{rel}: 重复法器 id {wid}")
+        seen.add(wid)
+        slots = w.get("slots")
+        if not isinstance(slots, int) or isinstance(slots, bool) or slots <= 0:
+            err(f"{rel}.{wid}: slots 必须是正整数")
+        if not isinstance(w.get("ordered"), bool):
+            err(f"{rel}.{wid}: ordered 必须是布尔值")
+        for num_field in ("spirit_max", "regen_per_sec", "sentences_per_cast", "recharge_ticks", "price"):
+            val = w.get(num_field)
+            if not isinstance(val, (int, float)) or isinstance(val, bool) or val <= 0:
+                err(f"{rel}.{wid}: {num_field} 必须是正数")
+        deck = w.get("default_deck", [])
+        if not isinstance(deck, list):
+            err(f"{rel}.{wid}: default_deck 必须是数组")
+        else:
+            if isinstance(slots, int) and len(deck) > slots:
+                err(f"{rel}.{wid}: default_deck 长度 {len(deck)} 超过 slots {slots}")
+            for cid in deck:
+                if cid and cid not in talisman_ids:
+                    err(f"{rel}.{wid}: default_deck 引用了未定义符卡 {cid}")
+    bag = data.get("starter_bag", [])
+    if isinstance(bag, list):
+        for cid in bag:
+            if cid not in talisman_ids:
+                err(f"{rel}: starter_bag 引用了未定义符卡 {cid}")
+    print(f"wands: {len(seen)} 把法器")
+    return seen
+
+
 def validate_vm_cases():
     """C-VM 用例守护（T1）：调用 tests/vm_cases/validate_cases.py 做结构 / 算术 / 不变量自检。
 
@@ -664,6 +718,7 @@ def main():
     validate_biomes(room_map, material_by_id, material_ids, reaction_ids)
     validate_cards()
     talisman_ids = validate_talismans(material_ids) or set()
+    validate_wands(talisman_ids)
     validate_texts(material_by_id, reaction_ids, talisman_ids)
     validate_vm_cases()
 

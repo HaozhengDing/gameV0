@@ -90,6 +90,12 @@
     "$ui_death_fire": { "text": "死于火伤", "corruptible": false },
     "$ui_death_explosion": { "text": "死于爆炸", "corruptible": false },
     "$ui_death_poison": { "text": "死于毒烟", "corruptible": false },
-    "$ui_death_enemy": { "text": "死于矿中异物", "corruptible": false }
+    "$ui_death_enemy": { "text": "死于矿中异物", "corruptible": false },
+    "$ui_wand_peachwood": { "text": "桃木剑", "corruptible": false },
+    "$ui_wand_bronze_bell": { "text": "铜铃", "corruptible": false },
+    "$ui_wand_bone_slip": { "text": "骨简", "corruptible": false },
+    "$ui_ordered": { "text": "成文", "corruptible": false },
+    "$ui_unordered": { "text": "散符", "corruptible": false },
+    "$ui_edit_safe_only": { "text": "仅洞天安全区可改符", "corruptible": false }
   }
 }

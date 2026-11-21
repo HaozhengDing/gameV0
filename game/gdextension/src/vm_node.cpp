@@ -61,6 +61,9 @@ void TalismanVMNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_ready_at_tick"), &TalismanVMNode::get_ready_at_tick);
     ClassDB::bind_method(D_METHOD("get_is_recharging"), &TalismanVMNode::get_is_recharging);
     ClassDB::bind_method(D_METHOD("cast_group", "group_id"), &TalismanVMNode::cast_group);
+    ClassDB::bind_method(D_METHOD("cast_deck", "wand", "state", "rng"), &TalismanVMNode::cast_deck,
+                         DEFVAL(Dictionary()), DEFVAL(Dictionary()));
+    ClassDB::bind_method(D_METHOD("get_all_cards"), &TalismanVMNode::get_all_cards);
 }
 
 bool TalismanVMNode::load_cards(const String &p_path) {
@@ -203,4 +206,130 @@ Dictionary TalismanVMNode::cast_group(const String &p_group_id) {
     }
     out["events"] = events;
     return out;
+}
+
+Dictionary TalismanVMNode::cast_deck(const Dictionary &p_wand, const Dictionary &p_state,
+                                     const Dictionary &p_rng) {
+    Dictionary out;
+    if (!data_.loaded) {
+        out["accepted"] = false;
+        out["reject_reason"] = "no_cards";
+        return out;
+    }
+
+    vm::CastRequest request;
+    request.op = "cast";
+    request.tick = p_wand.has("tick") ? static_cast<int>(int64_t(p_wand["tick"])) : static_cast<int>(tick_);
+
+    // 1) 法器字段
+    request.wand.spirit = p_wand.has("spirit") ? double(p_wand["spirit"]) : spirit_;
+    request.wand.spirit_max = p_wand.has("spirit_max") ? double(p_wand["spirit_max"]) : data_.wand.spirit_max;
+    request.wand.regen_per_sec = p_wand.has("regen_per_sec") ? double(p_wand["regen_per_sec"]) : data_.wand.regen_per_sec;
+    request.wand.sentences_per_cast = p_wand.has("sentences_per_cast") ? int(p_wand["sentences_per_cast"]) : 1;
+    request.wand.recharge_ticks = p_wand.has("recharge_ticks") ? int(p_wand["recharge_ticks"]) : 30;
+    request.wand.ready_at_tick = p_wand.has("ready_at_tick") ? int(p_wand["ready_at_tick"]) : 0;
+    request.wand.ordered = p_wand.has("ordered") ? bool(p_wand["ordered"]) : true;
+    request.wand.cursor = p_wand.has("cursor") ? int(p_wand["cursor"]) : 0;
+
+    if (p_wand.has("deck")) {
+        Array deck_arr = p_wand["deck"];
+        request.wand.deck.reserve(static_cast<size_t>(deck_arr.size()));
+        for (int i = 0; i < deck_arr.size(); ++i) {
+            const Variant &item = deck_arr[i];
+            if (item.get_type() == Variant::NIL) {
+                request.wand.deck.emplace_back("");
+            } else {
+                String s = item;
+                request.wand.deck.emplace_back(s.utf8().get_data());
+            }
+        }
+    }
+    request.wand.slots = p_wand.has("slots") ? int(p_wand["slots"]) : static_cast<int>(request.wand.deck.size());
+    if (request.wand.slots < static_cast<int>(request.wand.deck.size())) {
+        request.wand.slots = static_cast<int>(request.wand.deck.size());
+    }
+    while (static_cast<int>(request.wand.deck.size()) < request.wand.slots) {
+        request.wand.deck.emplace_back("");
+    }
+
+    // 2) 玩家神智/反噬/幻影符状态
+    request.state.sanity = p_state.has("sanity") ? int(p_state["sanity"]) : 100;
+    request.state.backlash = p_state.has("backlash") ? bool(p_state["backlash"]) : false;
+    if (p_state.has("phantom_slots")) {
+        Array ps = p_state["phantom_slots"];
+        for (int i = 0; i < ps.size(); ++i) {
+            request.state.phantom_slots.push_back(int(ps[i]));
+        }
+    }
+
+    // 3) 确定性 RNG 输入
+    request.rng.phantom_roll = p_rng.has("phantom_roll") ? double(p_rng["phantom_roll"]) : 1.0;
+    if (p_rng.has("phantom_slot") && p_rng["phantom_slot"].get_type() != Variant::NIL) {
+        request.rng.has_phantom_slot = true;
+        request.rng.phantom_slot = int(p_rng["phantom_slot"]);
+    }
+    if (p_rng.has("phantom_card") && p_rng["phantom_card"].get_type() != Variant::NIL) {
+        String pc = p_rng["phantom_card"];
+        if (!pc.is_empty()) {
+            request.rng.has_phantom_card = true;
+            request.rng.phantom_card = pc.utf8().get_data();
+        }
+    }
+
+    const vm::CastResult result = vm::cast(request, data_.catalog);
+
+    out["accepted"] = result.accepted;
+    out["reject_reason"] = String::utf8(result.reject_reason.c_str());
+    Array actions;
+    for (const vm::Value &action : result.actions) {
+        actions.append(vm_value_to_variant(action));
+    }
+    out["actions"] = actions;
+    Array consumed;
+    for (const std::string &card_id : result.consumed) {
+        consumed.append(String::utf8(card_id.c_str()));
+    }
+    out["consumed"] = consumed;
+    out["spirit_after"] = result.spirit_after;
+    out["spirit_max"] = request.wand.spirit_max;
+    out["sanity_after"] = result.sanity_after;
+    out["backlash_after"] = result.backlash_after;
+    Array ps_after;
+    for (int idx : result.phantom_slots_after) {
+        ps_after.append(idx);
+    }
+    out["phantom_slots_after"] = ps_after;
+    out["cursor_after"] = result.cursor_after;
+    out["round_ended"] = result.round_ended;
+    out["ready_at_tick_after"] = result.ready_at_tick_after;
+    out["action_count"] = result.action_count;
+    out["spawn_count"] = result.spawn_count;
+    out["max_depth"] = result.max_depth;
+    Array events;
+    for (const vm::Event &event : result.events) {
+        events.append(String::utf8(event.code.c_str()));
+    }
+    out["events"] = events;
+    return out;
+}
+
+Array TalismanVMNode::get_all_cards() const {
+    Array arr;
+    for (const vm::Card &card : data_.catalog.cards) {
+        Dictionary d;
+        d["id"] = String::utf8(card.id.c_str());
+        const char *seg = "body";
+        switch (card.segment) {
+            case vm::CardSegment::kHead: seg = "head"; break;
+            case vm::CardSegment::kBody: seg = "body"; break;
+            case vm::CardSegment::kFoot: seg = "foot"; break;
+            case vm::CardSegment::kPhantom: seg = "phantom"; break;
+        }
+        d["segment"] = String::utf8(seg);
+        d["spirit_cost"] = card.spirit_cost;
+        d["forbidden"] = card.forbidden;
+        d["element"] = String::utf8(card.element.c_str());
+        arr.append(d);
+    }
+    return arr;
 }

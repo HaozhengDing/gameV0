@@ -28,6 +28,8 @@ const EventBusScript := preload("res://scripts/event_bus.gd")
 const TextDBScript := preload("res://scripts/text_db.gd")
 const CombatManagerScript := preload("res://scripts/combat/combat_manager.gd")
 const VitalsScript := preload("res://scripts/vitals.gd")
+const WandManagerScript := preload("res://scripts/wand_manager.gd")
+const WandUIScript := preload("res://scripts/wand_ui.gd")
 
 const REACTION_TEXT_KEYS := {
 	"r-black-powder": "$react_black_powder",
@@ -54,6 +56,8 @@ var event_bus
 var text_db
 var combat
 var vitals
+var wand_manager
+var wand_ui
 var exit_marker: ColorRect
 
 # 玩法状态
@@ -104,7 +108,7 @@ func _setup() -> void:
 	_create_contracts()
 	_create_vm()
 	_create_hud()
-	hud.set_slots(group_names, group_costs)
+	_create_wands()
 	_create_combat()
 	_create_executor()
 	_start_round()
@@ -145,6 +149,9 @@ func _tick_once() -> void:
 	if combat != null:
 		combat.step_tick()
 	vm.tick_advance()
+	if wand_manager != null:
+		wand_manager.in_safe_zone = _is_player_in_safe_zone()
+		wand_manager.tick_advance(_is_player_in_quicksilver())
 	level.tick_fire_wall()
 	if completed:
 		return
@@ -154,6 +161,20 @@ func _tick_once() -> void:
 		hud.log_event("回到起点")
 		_refresh_hud()
 	_check_exit_now()
+
+func _is_player_in_safe_zone() -> bool:
+	if player == null:
+		return false
+	return player.cell_pos().x < LevelScript.START_CORRIDOR_W
+
+func _is_player_in_quicksilver() -> bool:
+	if sim == null or not sim.has_world() or player == null:
+		return false
+	var qs: int = sim.material_id("quicksilver")
+	if qs < 0:
+		return false
+	var c: Vector2i = player.cell_pos()
+	return sim.get_cell(c.x, maxi(c.y - 1, 0)) == qs or sim.get_cell(c.x, maxi(c.y - 4, 0)) == qs
 
 ## M1-12：每 tick 从 C-SIM v3 拉取模拟事件，按反应/类型聚合后发布至 C-EVT（防止单 tick 刷屏）。
 func _drain_sim_events() -> void:
@@ -359,6 +380,16 @@ func _create_hud() -> void:
 	hud.name = "HUD"
 	add_child(hud)
 
+func _create_wands() -> void:
+	wand_manager = WandManagerScript.new()
+	if not wand_manager.load_data(vm):
+		push_error("M1-03: data/wands.json 加载失败")
+	wand_ui = WandUIScript.new()
+	wand_ui.name = "WandUI"
+	add_child(wand_ui)
+	wand_ui.setup(wand_manager, text_db, hud)
+	wand_ui.deck_changed.connect(_refresh_hud)
+
 func _create_combat() -> void:
 	combat = CombatManagerScript.new()
 	combat.name = "CombatManager"
@@ -370,7 +401,7 @@ func _create_combat() -> void:
 
 func _create_executor() -> void:
 	executor = ExecutorScript.new()
-	executor.setup(sim, vm, level, player, hud, event_bus, text_db, combat, vitals)
+	executor.setup(sim, vm, level, player, hud, event_bus, text_db, combat, vitals, wand_manager)
 
 func _start_round() -> void:
 	completed = false
@@ -384,6 +415,11 @@ func _start_round() -> void:
 	player.setup(sim)
 	player.set_cell_pos(LevelScript.START_CELL)
 	player.reset_motion()
+	if wand_manager != null:
+		wand_manager.reset()
+		wand_manager.in_safe_zone = true
+	if wand_ui != null:
+		wand_ui.set_open(false)
 	if combat != null:
 		combat.reset_round()
 		_spawn_demo_targets()
@@ -438,6 +474,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			if wand_ui != null and wand_ui.is_open:
+				return
 			_do_cast(_aim_cell())
 			get_viewport().set_input_as_handled()
 		return
@@ -446,14 +484,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not key.pressed or key.echo:
 			return
 		match key.keycode:
+			KEY_B:
+				if wand_ui != null:
+					wand_manager.in_safe_zone = _is_player_in_safe_zone()
+					wand_ui.toggle()
+					player.input_enabled = not wand_ui.is_open
+			KEY_ESCAPE:
+				if wand_ui != null and wand_ui.is_open:
+					wand_ui.set_open(false)
+					player.input_enabled = true
+				else:
+					return
 			KEY_1:
-				_select_group(0)
+				_select_wand(0)
 			KEY_2:
-				_select_group(1)
+				_select_wand(1)
 			KEY_3:
-				_select_group(2)
-			KEY_4:
-				_select_group(3)
+				_select_wand(2)
 			KEY_E:
 				var aim_e := _aim_cell()
 				executor.absorb(aim_e)
@@ -492,16 +539,22 @@ func _aim_cell() -> Vector2i:
 	)
 
 func _do_cast(aim: Vector2i) -> void:
-	if group_ids.is_empty():
-		return
-	var gid := String(group_ids[selected_group])
-	executor.cast(gid, aim)
+	if wand_manager != null and wand_manager.wand_count() > 0:
+		executor.cast_active_wand(aim)
+		if wand_ui != null and wand_ui.is_open:
+			wand_ui.refresh()
+	elif not group_ids.is_empty():
+		var gid := String(group_ids[selected_group])
+		executor.cast(gid, aim)
 	_refresh_hud()
 
-func _select_group(index: int) -> void:
-	if group_ids.is_empty():
+func _select_wand(index: int) -> void:
+	if wand_manager == null or wand_manager.wand_count() == 0:
 		return
-	selected_group = wrapi(index, 0, group_ids.size())
+	wand_manager.select_wand(index)
+	selected_group = wand_manager.selected_index
+	if wand_ui != null and wand_ui.is_open:
+		wand_ui.refresh()
 
 # ================================================================== 重开
 
@@ -576,15 +629,26 @@ func _refresh_hud() -> void:
 		"hp": 100.0, "hp_eff_max": 100.0, "hp_base_max": 100.0,
 		"lanterns": float(LANTERNS_MAX), "lanterns_max": float(LANTERNS_MAX),
 	}
+	var mana_val: float = vm.get_spirit()
+	var mana_max: float = vm.get_spirit_max()
+	var recharging: bool = vm.get_is_recharging()
+	var sel_idx: int = selected_group
+	if wand_manager != null and wand_manager.wand_count() > 0:
+		var aw: Dictionary = wand_manager.active_wand()
+		mana_val = float(aw.get("spirit", mana_val))
+		mana_max = float(aw.get("spirit_max", mana_max))
+		recharging = wand_manager.is_active_recharging(sim.get_tick())
+		sel_idx = wand_manager.selected_index
+		hud.set_wand_slots(wand_manager.build_hud_slots(text_db))
 	hud.update_state({
 		"hp": float(vsnap["hp"]),
 		"hp_eff_max": float(vsnap["hp_eff_max"]),
 		"hp_base_max": float(vsnap["hp_base_max"]),
 		"lanterns": float(vsnap["lanterns"]),
 		"lanterns_max": float(vsnap["lanterns_max"]),
-		"mana": vm.get_spirit(),
-		"mana_max": vm.get_spirit_max(),
-		"recharging": vm.get_is_recharging(),
+		"mana": mana_val,
+		"mana_max": mana_max,
+		"recharging": recharging,
 		"levitate": player.levitate,
 		"levitate_max": PlayerScript.LEVITATE_MAX,
 		"water": executor.gourd_water,
@@ -592,7 +656,7 @@ func _refresh_hud() -> void:
 		"oil": executor.gourd_oil,
 		"oil_cap": ExecutorScript.OIL_CAP,
 		"liquid": executor.current_liquid,
-		"selected": selected_group,
+		"selected": sel_idx,
 		"cursor_mat": _cursor_material_text(),
 		"exit_hint": hint,
 		"statuses": status_items,
@@ -1080,6 +1144,49 @@ func _run_smoke() -> void:
 			vitals.reset()
 			print("T4B_SMOKE_STEP M1-05七星灯双轴 hp=100->70 eff_6of7=%.1f restore=100.0" % eff_after_one)
 
+	# 12) M1-03 三段式完整游标 + 3 把法器 + 成文/散符 + 洞天安全区改符锁（D-M1-4）
+	if fail == "":
+		wand_manager.reset()
+		if wand_manager.wand_count() != 3:
+			fail = "M1-03 法器数异常：%d（期望 3）" % wand_manager.wand_count()
+		else:
+			# 12a) 桃木剑（成文 4 位：斩+爆 / 掘+归）：第 1 发 cursor->2，第 2 发 cursor->0 + 回符
+			wand_manager.select_wand(0)
+			player.set_cell_pos(Vector2i(200, 350))
+			var w1a: Dictionary = executor.cast_active_wand(Vector2i(220, 350))
+			_fast_forward(14)
+			var w1b: Dictionary = executor.cast_active_wand(Vector2i(220, 350))
+			var rech_now: bool = wand_manager.is_active_recharging(sim.get_tick())
+			if not bool(w1a.get("accepted", false)) or int(w1a.get("cursor_after", -1)) != 2 or bool(w1a.get("round_ended", true)):
+				fail = "M1-03 桃木剑第1发游标异常（%s）" % str(w1a)
+			elif not bool(w1b.get("accepted", false)) or int(w1b.get("cursor_after", -1)) != 0 or not bool(w1b.get("round_ended", false)) or not rech_now:
+				fail = "M1-03 桃木剑第2发未回符（%s rech=%s）" % [str(w1b), str(rech_now)]
+			else:
+				# 12b) 铜铃（成文 6 位：敕·触 + 斩 + 火 + 化水）：验证静态展开触发深度 depth=1
+				wand_manager.select_wand(1)
+				var w2: Dictionary = executor.cast_active_wand(Vector2i(240, 350))
+				if not bool(w2.get("accepted", false)) or int(w2.get("max_depth", 0)) < 1:
+					fail = "M1-03 铜铃敕·触未展开子句（max_depth=%d）" % int(w2.get("max_depth", 0))
+				else:
+					# 12c) 骨简（散符乱序 + 每次 2 句）
+					wand_manager.select_wand(2)
+					var w3: Dictionary = executor.cast_active_wand(Vector2i(240, 350))
+					if not bool(w3.get("accepted", false)) or int(w3.get("actions", 0)) <= 0:
+						fail = "M1-03 骨简散符双句施法失败（%s）" % str(w3)
+					else:
+						# 12d) D-M1-4 安全区改符锁：矿井内拒绝编辑，安全区内允许装配并生效
+						wand_manager.select_wand(0)
+						wand_manager.in_safe_zone = false
+						var edit_blocked: bool = not wand_manager.equip_from_bag(0, 0, 0)
+						wand_manager.in_safe_zone = true
+						var bag_first: String = wand_manager.bag[0]
+						var edit_ok: bool = wand_manager.equip_from_bag(0, 0, 0)
+						var slot0_after: String = String((wand_manager.get_wand(0)["deck"] as Array)[0])
+						if not edit_blocked or not edit_ok or slot0_after != bag_first:
+							fail = "M1-03 安全区改符锁异常（blocked=%s ok=%s slot0=%s）" % [str(edit_blocked), str(edit_ok), slot0_after]
+						else:
+							print("T4B_SMOKE_STEP M1-03三法器与游标 wands=3 cursor=0->2->0 trigger_depth=%d safe_edit=ok" % int(w2.get("max_depth", 0)))
+
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)
 		print("T4B_SMOKE_FAIL " + fail)
@@ -1098,6 +1205,8 @@ func _fast_forward(tick_count: int) -> void:
 		if combat != null:
 			combat.step_tick()
 		vm.tick_advance()
+		if wand_manager != null:
+			wand_manager.tick_advance(false)
 		level.tick_fire_wall()
 
 func _count_material(center: Vector2i, radius: int, material: int) -> int:

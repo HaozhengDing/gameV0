@@ -39,8 +39,15 @@ public:
     int64_t get_ready_at_tick() const;
     bool get_is_recharging() const;
 
-    // 按符组施法：返回 {accepted, reject_reason, actions, consumed, spirit_after, ...}
+    // 按符组施法（T4b 快捷入口）：返回 {accepted, reject_reason, actions, consumed, spirit_after, ...}
     Dictionary cast_group(const String &p_group_id);
+
+    // M1-03：真法器牌堆施法（完整 C-VM CastRequest：真游标/成文与散符/禁符反噬/幻影符）
+    Dictionary cast_deck(const Dictionary &p_wand, const Dictionary &p_state = Dictionary(),
+                         const Dictionary &p_rng = Dictionary());
+
+    // M1-03：导出全部已加载符卡元数据供组装 UI 使用
+    Array get_all_cards() const;
 
 protected:
     static void _bind_methods();

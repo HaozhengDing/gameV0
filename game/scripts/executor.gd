@@ -38,6 +38,7 @@ var event_bus
 var text_db
 var combat
 var vitals
+var wand_manager
 
 # 葫芦 / 实体状态 / 施法反馈（气血与七星灯由 vitals 管理）
 var gourd_water := 0
@@ -64,7 +65,7 @@ var mat_yin_qi := 15
 var mat_toxic_smoke := 17
 
 func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud,
-		p_event_bus = null, p_text_db = null, p_combat = null, p_vitals = null) -> void:
+		p_event_bus = null, p_text_db = null, p_combat = null, p_vitals = null, p_wand_manager = null) -> void:
 	sim = p_sim
 	vm = p_vm
 	level = p_level
@@ -74,6 +75,7 @@ func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud,
 	text_db = p_text_db
 	combat = p_combat
 	vitals = p_vitals
+	wand_manager = p_wand_manager
 	_cache_material_ids()
 
 func _cache_material_ids() -> void:
@@ -493,15 +495,79 @@ func cast(group_id: String, aim: Vector2i) -> Dictionary:
 func _reason_cn(reason: String) -> String:
 	match reason:
 		"recharging":
+			return "回符中"
+		"cast_interval":
 			return "冷却中"
 		"empty_deck":
-			return "无符"
+			return "空槽"
 		"no_cards":
 			return "符卡未加载"
 		"unknown_group":
 			return "未知符槽"
 		_:
 			return reason
+
+## M1-03：按当前法器真游标与真牌堆施法（成文/散符/多句/禁符反噬/朱砂临时位）。
+func cast_active_wand(aim: Vector2i, sanity: int = 100, backlash: bool = false,
+		phantom_slots: Array = [], rng_cfg: Dictionary = {}) -> Dictionary:
+	var summary := {
+		"accepted": false,
+		"reject_reason": "",
+		"actions": 0,
+		"projectiles": 0,
+		"consumed": [],
+		"cursor_after": 0,
+		"round_ended": false,
+		"max_depth": 0,
+		"events": [],
+	}
+	if sim == null or vm == null or combat == null or wand_manager == null:
+		return summary
+	var tick: int = sim.get_tick() if sim.has_world() else 0
+	var temp_slot: bool = combat.get_temp_slot_ticks() > 0
+	var result: Dictionary = wand_manager.cast_active(vm, tick, temp_slot, sanity, backlash, phantom_slots, rng_cfg)
+	var accepted: bool = bool(result.get("accepted", false))
+	summary["accepted"] = accepted
+	var reason: String = String(result.get("reject_reason", ""))
+	summary["reject_reason"] = reason
+	if not accepted:
+		last_cast_status = _reason_cn(reason)
+		if reason != "recharging" and reason != "cast_interval":
+			_log(last_cast_status)
+		return summary
+	var events: Array = result.get("events", [])
+	summary["events"] = events
+	summary["consumed"] = result.get("consumed", [])
+	summary["cursor_after"] = int(result.get("cursor_after", 0))
+	summary["round_ended"] = bool(result.get("round_ended", false))
+	summary["max_depth"] = int(result.get("max_depth", 0))
+	if events.has("fizzle_no_spirit"):
+		last_cast_status = "法力不足"
+		if event_bus != null:
+			event_bus.publish("spell_fizzle", tick, {"source_id": "player", "reason": "no_spirit"})
+		_log(last_cast_status)
+		return summary
+	var actions: Array = result.get("actions", [])
+	summary["actions"] = actions.size()
+	var origin := Vector2(float(aim.x), float(aim.y))
+	var dir := _player_facing()
+	if player != null:
+		var pc: Vector2i = player.cell_pos()
+		origin = Vector2(float(pc.x), float(maxi(pc.y - SPRAY_ORIGIN_OFFSET_Y, 0)))
+		var delta := Vector2(float(aim.x) - origin.x, float(aim.y) - origin.y)
+		if delta.length() > 0.01:
+			dir = delta.normalized()
+	if event_bus != null:
+		var w: Dictionary = wand_manager.active_wand()
+		event_bus.publish("spell_cast", tick, {
+			"source_id": "player", "wand_id": String(w.get("id", "")),
+			"pos": Vector2i(floori(origin.x), floori(origin.y)),
+			"value": float(actions.size()),
+		})
+	var exec_res: Dictionary = combat.execute_actions(actions, origin, dir, "player", "player")
+	summary["projectiles"] = int(exec_res.get("projectiles", 0))
+	last_cast_status = "ok"
+	return summary
 
 func _ignite_around(center: Vector2i, radius: int, summary: Dictionary) -> void:
 	var r := maxi(radius, 0)

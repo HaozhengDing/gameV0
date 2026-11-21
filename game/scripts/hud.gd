@@ -35,7 +35,7 @@ const COL_ST_BURN := Color(0.92, 0.34, 0.14, 0.90)
 const COL_ST_WET := Color(0.24, 0.56, 0.92, 0.90)
 const COL_ST_POISON := Color(0.56, 0.72, 0.24, 0.90)
 
-const HELP_TEXT := "A/D 走 | W/Space 浮空 | 1-4 切符 | 左键 施法 | E 吸 | Q 喷 | Tab 水/油 | F 点火 | R 重开"
+const HELP_TEXT := "A/D 走 | W/Space 浮空 | 1-3 法器 | B 改符 | 左键 施法 | E 吸 | Q 喷 | Tab 水/油 | F 点火 | R 重开"
 
 # 左上资源条节点（M1-05：7 盏魄灯 + 气血红条含上限锁段 + 法力 + 浮空 + 葫芦）
 var _lantern_bgs: Array[ColorRect] = []
@@ -140,16 +140,16 @@ func _build_slots() -> void:
 	_slot_titles.clear()
 	_slot_costs.clear()
 	var x0 := 358.0
-	var slot_w := 148.0
-	var slot_h := 62.0
+	var slot_w := 204.0
+	var slot_h := 66.0
 	var gap := 10.0
-	for i in range(4):
+	for i in range(3):
 		var sx := x0 + float(i) * (slot_w + gap)
 		var border := _make_rect(Vector2(sx, 12), Vector2(slot_w, slot_h), COL_BORDER_DIM)
 		var bg := _make_rect(Vector2(sx + 2, 14), Vector2(slot_w - 4, slot_h - 4), COL_SLOT_BG)
-		var title := _make_label(Vector2(sx + 10, 17), FONT_SIZE_SLOT, Color(0.96, 0.94, 0.88))
+		var title := _make_label(Vector2(sx + 10, 16), 20, Color(0.96, 0.94, 0.88))
 		title.text = "%d" % (i + 1)
-		var cost := _make_label(Vector2(sx + 10, 47), FONT_SIZE_COST, Color(0.68, 0.80, 0.96))
+		var cost := _make_label(Vector2(sx + 10, 46), 15, Color(0.74, 0.84, 0.94))
 		cost.text = ""
 		_slot_borders.append(border)
 		_slot_bgs.append(bg)
@@ -160,9 +160,9 @@ func _build_slots() -> void:
 	_status_labels.clear()
 	for j in range(3):
 		var bx := x0 + float(j) * 74.0
-		var sbg := _make_rect(Vector2(bx, 82), Vector2(66, 28), COL_ST_BURN)
+		var sbg := _make_rect(Vector2(bx, 86), Vector2(66, 28), COL_ST_BURN)
 		sbg.visible = false
-		var slbl := _make_label(Vector2(bx + 8, 83), 18, Color(0.98, 0.98, 0.96))
+		var slbl := _make_label(Vector2(bx + 8, 87), 18, Color(0.98, 0.98, 0.96))
 		slbl.visible = false
 		_status_bgs.append(sbg)
 		_status_labels.append(slbl)
@@ -216,7 +216,18 @@ func _make_label(pos: Vector2, font_size: int, color: Color) -> Label:
 	add_child(label)
 	return label
 
-## 设置 4 个符槽的显示名称与灵力耗费（名称来自 data/talismans.json，如 斩 + 爆）。
+## 设置法器槽的极简名称与实时符位组成（M1-03：无合体名，直接列符位组成）。
+func set_wand_slots(items: Array) -> void:
+	for i in range(_slot_titles.size()):
+		if i < items.size() and items[i] is Dictionary:
+			var d: Dictionary = items[i]
+			_slot_titles[i].text = "%d %s" % [i + 1, String(d.get("name", ""))]
+			_slot_costs[i].text = String(d.get("subtitle", ""))
+		else:
+			_slot_titles[i].text = "%d —" % (i + 1)
+			_slot_costs[i].text = ""
+
+## 兼容旧接口：设置符槽显示名与耗费。
 func set_slots(names: Array, costs: Array) -> void:
 	for i in range(_slot_titles.size()):
 		if i < names.size():
