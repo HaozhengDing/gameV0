@@ -5,7 +5,7 @@ description: 为《刍狗》gameV0 的设计抉择或试玩反馈查找跨平台
 
 # 游戏设计决策调研
 
-在 DeepSeek Harness 打开 gameV0，可用 `/game-decision-research 打击感不足怎么办？` 显式调用。自然语言提出需要参考案例的决策问题时也可调用。
+在 DeepSeek Harness 或 Google Antigravity 打开 gameV0，可用 `/game-decision-research 打击感不足怎么办？` 显式调用。自然语言提出需要参考案例的决策问题时也可调用。
 
 ## 从症状定位决策
 

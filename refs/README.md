@@ -70,4 +70,4 @@ raw → analyzed（填完 A–H）→ mapped（I 能对应到系统）→ protot
 
 ## 游戏开发决策参考
 
-战斗、关卡、教学等开发抉择的方案与证据见 [游戏开发决策参考卡](cards/decisions/README.md)。DeepSeek Harness 中可用 `/game-decision-research <问题>` 更新相关卡片。
+战斗、关卡、教学等开发抉择的方案与证据见 [游戏开发决策参考卡](cards/decisions/README.md)。在 DeepSeek Harness 或 Google Antigravity 中打开本仓库，用 `/game-decision-research <问题>` 更新卡片。两端共用同一份[项目技能](../.agents/skills/game-decision-research/SKILL.md)。

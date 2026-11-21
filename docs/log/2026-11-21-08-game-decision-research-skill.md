@@ -14,8 +14,8 @@
 
 | 文件 | 改了什么 |
 |---|---|
-| [技能入口](../../.dsh/skills/game-decision-research/SKILL.md) | 从症状、现版基线和项目约束定位抉择，按证据产出方案卡与决策比较 |
-| [平台与证据指南](../../.dsh/skills/game-decision-research/references/source-guide.md) | 中文与英文来源路线、Harness 可选工具、视频取证、跨平台去重和离线回退 |
+| [技能入口](../../.agents/skills/game-decision-research/SKILL.md) | 从症状、现版基线和项目约束定位抉择，按证据产出方案卡与决策比较 |
+| [平台与证据指南](../../.agents/skills/game-decision-research/references/source-guide.md) | 中文与英文来源路线、Harness 可选工具、视频取证、跨平台去重和离线回退 |
 | [方案卡规范](../../refs/cards/decisions/README.md) | 定义主题位置、卡片维度、稳定锚点、证据编号与试验状态 |
 | [打击感案例](../../refs/cards/decisions/combat-hit-feedback.md) | 抖音原始卡转写、开发者演讲、研究与 Godot 文档对照本作 C-EVT、D1 和环境 DoT |
 | [参考目录](../../refs/README.md) | 补入口与调用方式 |

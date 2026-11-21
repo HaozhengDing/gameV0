@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-21 | [2026-11-21-10-antigravity-decision-skill.md](2026-11-21-10-antigravity-decision-skill.md) | 更新 | 详细 | Antigravity Gemini 与 DeepSeek Harness 从 `.agents/skills/` 加载同一个游戏开发决策调研技能 |
 | 2026-11-21 | [2026-11-21-09-review-new-proposals-and-next-order.md](2026-11-21-09-review-new-proposals-and-next-order.md) | 评审 + 建议 | 摘要 | 评审跳跃跟手/环境表现层/打击感三份新文档：建议主攻 M1-06，仅顺手带跳跃 P0，环境表现留 M1-11/M2、打击感保留现版 |
 | 2026-11-21 | [2026-11-21-08-game-decision-research-skill.md](2026-11-21-08-game-decision-research-skill.md) | 建议 + 更新 | 详细 | DeepSeek Harness 项目技能，跨平台取证、方案卡与本作 A/B，首例为 M1-10 打击感 |
 | 2026-11-21 | [2026-11-21-07-visual-production.md](2026-11-21-07-visual-production.md) | 调研 + 建议 | 详细 | 视觉与动效生产路线：把"审美复刻"视频拆成决策卡（3 候选 + 5 维比较 + 一周最小验证），推荐程序化最小切片、整屏复刻留 M2 |
