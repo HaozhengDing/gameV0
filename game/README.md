@@ -14,6 +14,7 @@
   - `main.gd`：装配、固定步长 1/60、相机跟随 + 视口渲染、输入、HUD、重开、`--t4b-smoke` / `--t4b-shot`
   - `level.gd`：960×540 cells 矿井关卡；`data/rooms/` 两个房间按 `tile_size=16` 展开（384×224 cells/间）、走廊、火障 + 油槽、出口、灰盒可燃材质统一蔓延（1.5%/tick）
   - `executor.gd`：C-ACT 子集执行（spawn/explode/ignite/convert/dig/spawn_material…）+ 葫芦吸/喷 + 手动点火 + 火伤与灭火
+  - `scripts/feedback/`：M1-10 反馈层（打击感六层）——`fx_layer.gd` 世界空间符火/火星/爆散/飘字、`screen_fx.gd` 白闪与受击红晕、`sfx_bank.gd` 程序化分层音效、`feedback_director.gd` 消费 C-EVT 的顿帧/震屏/后坐（规范见 `docs/tech/m1-feedback-juice.md`）
   - `player.gd`：Noita 式轻量物理移动（重力 + 碎屑 3 格自动迈步 + W/Space 有限浮空条 + 液体浮力/阻力 + 火伤闪烁）；`hud.gd`：极简彩色状态条 + 4 符槽平铺 + 材质提示 + 键位条；`overlay.gd`：瞄准准星与施法/喷液反馈圈
 - `tests/`：`smoke_sim.gd`（T4a 扩展自检）、`t4b_smoke` 由 main.gd 承担
 
@@ -50,6 +51,7 @@ Godot 与 godot-cpp 的大版本必须一致（4.5 ↔ godot-cpp 4.5），否则
     godot --headless --path game -- --t4b-smoke                    # T4b 组合时刻自检（T4B_SMOKE_OK + exit 0）
     godot --headless --path game --script res://tests/smoke_sim.gd # T4a 扩展自检（SMOKE_OK）
     godot --path game -- --t4b-shot                                # 窗口模式截一张 t4b_shot.png 后退出
+    godot --path game -- --t4b-fx-shot                             # 同上，但先点亮反馈层六层并冻结在峰值帧（目检用）
 
 ## 操作
 

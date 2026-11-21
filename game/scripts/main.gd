@@ -33,6 +33,11 @@ const WandUIScript := preload("res://scripts/wand_ui.gd")
 const WangGenScript := preload("res://scripts/wang_gen.gd")
 const SteleScript := preload("res://scripts/stele.gd")
 const BiomeHazardsScript := preload("res://scripts/biome_hazards.gd")
+# M1-10 反馈层（打击感六层）：火光 / 后坐 / 定向震屏 / 命中 / 击杀 / 分层音效
+const FxLayerScript := preload("res://scripts/feedback/fx_layer.gd")
+const ScreenFxScript := preload("res://scripts/feedback/screen_fx.gd")
+const SfxBankScript := preload("res://scripts/feedback/sfx_bank.gd")
+const FeedbackDirectorScript := preload("res://scripts/feedback/feedback_director.gd")
 
 const REACTION_TEXT_KEYS := {
 	"r-black-powder": "$react_black_powder",
@@ -45,6 +50,7 @@ const REACTION_TEXT_KEYS := {
 	"r-cinnabar-talisman": "$react_cinnabar_talisman",
 }
 const REACTION_LOG_COOLDOWN := 120  # 2s 同类反应 HUD 提示节流（60Hz）
+const CAST_FLASH_COLOR := Color(1.0, 0.86, 0.44)  # 符纸燃起的暖白：施法火光固定色，命中色按伤害类型走
 
 # 场景节点
 var sim: SimWorldNode
@@ -65,6 +71,10 @@ var wang_gen
 var stele_layer
 var biome_hazards
 var exit_marker: ColorRect
+var feedback
+var fx_layer
+var screen_fx
+var sfx_bank
 
 # 玩法状态
 var group_ids: Array = []
@@ -74,6 +84,7 @@ var selected_group := 0
 var completed := false
 var smoke_mode := false
 var shot_mode := false
+var fx_shot_mode := false
 var use_wang_mine := true
 var world_w := WORLD_W
 var world_h := WORLD_H
@@ -82,6 +93,7 @@ var current_sanity := 100
 var _world_ready := false
 var _shot_timer := 0.0
 var _shot_done := false
+var _shot_wait := SHOT_WAIT
 var _accum := 0.0
 var _hud_timer := 0.0
 var _last_view := Vector2i(-999999, -999999)
@@ -93,7 +105,8 @@ var _reaction_log_tick: Dictionary = {}
 func _ready() -> void:
 	var user_args := OS.get_cmdline_user_args()
 	smoke_mode = user_args.has("--t4b-smoke")
-	shot_mode = user_args.has("--t4b-shot")
+	fx_shot_mode = user_args.has("--t4b-fx-shot")
+	shot_mode = user_args.has("--t4b-shot") or fx_shot_mode
 	use_wang_mine = not smoke_mode and not user_args.has("--classic-t4b")
 	if use_wang_mine:
 		world_w = WangGenScript.WORLD_W
@@ -128,6 +141,7 @@ func _setup() -> void:
 	_create_hud()
 	_create_wands()
 	_create_combat()
+	_create_feedback()
 	_create_executor()
 	_start_round()
 	if smoke_mode or shot_mode:
@@ -146,6 +160,8 @@ func _setup() -> void:
 	])
 
 func _quit(code: int) -> void:
+	if feedback != null:
+		feedback.shutdown()
 	var tree := get_tree()
 	if tree != null:
 		tree.quit(code)
@@ -269,7 +285,7 @@ func _process(delta: float) -> void:
 		_refresh_hud()
 	if shot_mode and not _shot_done:
 		_shot_timer += delta
-		if _shot_timer >= SHOT_WAIT:
+		if _shot_timer >= _shot_wait:
 			_shot_done = true
 			_take_shot()
 
@@ -410,6 +426,8 @@ func _create_vm() -> void:
 func _create_hud() -> void:
 	hud = HudScript.new()
 	hud.name = "HUD"
+	# 反馈层占 CanvasLayer 1，HUD 抬到 2（保证白闪/红晕不盖住血条与灯格）
+	hud.layer = 2
 	add_child(hud)
 
 func _create_wands() -> void:
@@ -430,6 +448,21 @@ func _create_combat() -> void:
 	combat.setup(sim, event_bus, text_db, overlay, hud)
 	if vitals != null:
 		combat.player_heal_callback = func(amount: float) -> void: vitals.heal_hp(amount)
+
+## M1-10 反馈层装配：世界空间 FX / 屏幕空间 FX / 分层音效 / 反馈导演（订阅 C-EVT）。
+func _create_feedback() -> void:
+	fx_layer = FxLayerScript.new()
+	fx_layer.name = "FxLayer"
+	add_child(fx_layer)
+	screen_fx = ScreenFxScript.new()
+	screen_fx.name = "ScreenFx"
+	add_child(screen_fx)
+	sfx_bank = SfxBankScript.new()
+	sfx_bank.setup(self)
+	feedback = FeedbackDirectorScript.new()
+	feedback.name = "FeedbackDirector"
+	add_child(feedback)
+	feedback.setup(event_bus, camera, player, fx_layer, screen_fx, sfx_bank)
 
 func _create_executor() -> void:
 	executor = ExecutorScript.new()
@@ -630,13 +663,19 @@ func _aim_cell() -> Vector2i:
 	)
 
 func _do_cast(aim: Vector2i) -> void:
+	var origin: Vector2 = Vector2(player.cell_pos()) if player != null else Vector2(aim)
+	var summary: Dictionary = {}
 	if wand_manager != null and wand_manager.wand_count() > 0:
-		executor.cast_active_wand(aim)
+		summary = executor.cast_active_wand(aim)
 		if wand_ui != null and wand_ui.is_open:
 			wand_ui.refresh()
 	elif not group_ids.is_empty():
 		var gid := String(group_ids[selected_group])
-		executor.cast(gid, aim)
+		summary = executor.cast(gid, aim)
+	# 第 1/2/3 层：火光 + 后坐 + 定向震屏；威力按本句实际抛出的投射物数量放大
+	if feedback != null:
+		var power: float = clampf(0.6 + 0.4 * float(summary.get("projectiles", 1)), 0.6, 2.0)
+		feedback.on_cast(origin, Vector2(aim), power, CAST_FLASH_COLOR)
 	_refresh_hud()
 
 func _select_wand(index: int) -> void:
@@ -660,6 +699,8 @@ func _restart() -> void:
 	_start_round()
 	if overlay != null:
 		overlay.clear_pulses()
+	if feedback != null:
+		feedback.reset()
 	hud.clear_complete()
 	hud.clear_log()
 	hud.log_event("重开本轮（seed %d）" % _run_seed if use_wang_mine else "重开本轮")
@@ -681,7 +722,32 @@ func _setup_shot() -> void:
 	_apply_view()
 	_shot_timer = 0.0
 	_shot_done = false
-	print("T4B_SHOT_ARMED player_cell=%s wait=%.2fs" % [str(shot_pos), SHOT_WAIT])
+	_shot_wait = SHOT_WAIT
+	if fx_shot_mode:
+		# 反馈层目检：把六层同时点亮并冻结在峰值帧，0.06s 后截图
+		_shot_wait = 0.06
+		_arm_feedback_demo(shot_pos)
+	print("T4B_SHOT_ARMED player_cell=%s wait=%.2fs fx=%s" % [str(shot_pos), _shot_wait, str(fx_shot_mode)])
+
+## 仅用于 --t4b-fx-shot：直接驱动 FX 层，产出可目检的一帧（不经过 time_scale，避免截图被顿帧拖慢）。
+func _arm_feedback_demo(at: Vector2i) -> void:
+	if fx_layer == null:
+		return
+	var c := Vector2(float(at.x), float(at.y))
+	var dir := Vector2.RIGHT
+	fx_layer.muzzle(c + Vector2(0.0, -4.0), dir, 1.6, CAST_FLASH_COLOR)
+	fx_layer.impact(c + Vector2(13.0, -4.0), dir, 26.0, Color(1.0, 0.55, 0.18), false)
+	fx_layer.impact(c + Vector2(24.0, -6.0), -dir, 0.0, Color(0.68, 0.48, 1.0), true)
+	fx_layer.damage_number(c + Vector2(16.0, -10.0), 37.0, Color(1.0, 0.55, 0.18), true)
+	fx_layer.reaction_ring(c + Vector2(20.0, -4.0), 7.0, Color(1.0, 0.62, 0.2))
+	if screen_fx != null:
+		screen_fx.flash(Color(1.0, 0.96, 0.88), 0.16, 0.09)
+		screen_fx.hurt(0.32)
+	if player != null and player.has_method("add_recoil"):
+		player.add_recoil(Vector2(-8.0, 0.0))
+	# 冻结衰减，截到六层的峰值帧（只影响目检模式）
+	if feedback != null:
+		feedback.set_process(false)
 
 func _take_shot() -> void:
 	await RenderingServer.frame_post_draw
@@ -1345,6 +1411,37 @@ func _run_smoke() -> void:
 						seeds_ok, rast_ms, wg.steles.size()
 					])
 
+	# M1-10 反馈层：走真实路径（施法火光/后坐 → 命中/击杀 → 分层音效 → 顿帧复位）
+	if fail == "":
+		var fb_fail := ""
+		if feedback == null or sfx_bank == null or fx_layer == null or screen_fx == null:
+			fb_fail = "M1-10 反馈层未装配"
+		elif not sfx_bank.has_stream("fire") or not sfx_bank.has_stream("hit") or not sfx_bank.has_stream("kill"):
+			fb_fail = "M1-10 分层音效合成缺失"
+		else:
+			var pc: Vector2i = player.cell_pos()
+			var pcv := Vector2(float(pc.x), float(pc.y))
+			feedback.on_cast(pcv, pcv + Vector2(12.0, 0.0), 1.2, CAST_FLASH_COLOR)
+			feedback.on_event({
+				"type": "entity_damaged", "target_id": "smoke-dummy",
+				"pos": pc + Vector2i(6, -3), "value": 24.0, "damage_type": "火",
+			})
+			var slow_after_hit: bool = Engine.time_scale < 0.5
+			feedback.on_event({
+				"type": "entity_killed", "target_id": "smoke-dummy",
+				"pos": pc + Vector2i(9, -3), "value": 30.0, "damage_type": "阴",
+			})
+			fx_layer.update_fx(0.016)
+			screen_fx.tick(0.016)
+			feedback.reset()
+			if not slow_after_hit:
+				fb_fail = "M1-10 命中顿帧未生效（time_scale=%.2f）" % Engine.time_scale
+			elif absf(Engine.time_scale - 1.0) > 0.001:
+				fb_fail = "M1-10 顿帧未复位（time_scale=%.2f）" % Engine.time_scale
+		if fb_fail != "":
+			fail = fb_fail
+		else:
+			print("T4B_SMOKE_STEP M1-10打击感六层 fx=ok screen=ok sfx=3 hitstop=ok recoil=ok")
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)
 		print("T4B_SMOKE_FAIL " + fail)

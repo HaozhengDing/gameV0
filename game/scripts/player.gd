@@ -34,6 +34,7 @@ const WORLD_H := 540
 const BODY_COLOR := Color(0.96, 0.86, 0.36)
 const HURT_COLOR := Color(0.98, 0.28, 0.22)
 const HURT_FLASH_SEC := 0.22
+const RECOIL_RETURN := 70.0          # px/s 后坐力视觉位移的回弹速度（M1-10 第 2 层）
 
 var sim: SimWorldNode
 var facing := Vector2.RIGHT
@@ -54,6 +55,7 @@ var _coyote_timer := 0.0
 var _regen_delay_timer := 0.0
 var _prev_thrust := false
 var _hurt_timer := 0.0
+var recoil := Vector2.ZERO           # 世界像素：法器后坐造成的人物视觉位移（不参与碰撞）
 var _body_rect: ColorRect
 var _eye_rect: ColorRect
 var _jet_rect: ColorRect
@@ -88,6 +90,13 @@ func cell_pos() -> Vector2i:
 ## 把玩家放到某个 cell 的中心（smoke / 重开 / 复位用）。
 func set_cell_pos(c: Vector2i) -> void:
 	position = Vector2(float(c.x * SCALE) + float(SCALE) * 0.5, float(c.y * SCALE) + float(SCALE) * 0.5)
+
+## M1-10 第 2 层：法器后坐力 —— 人物视觉被推一下，随后回弹；不改碰撞与位置。
+func add_recoil(v: Vector2) -> void:
+	recoil += v
+	if recoil.length() > 10.0:
+		recoil = recoil.normalized() * 10.0
+	_update_visual()
 
 ## 火伤视觉闪烁（与 HUD 格数变化形成双通道反馈）。
 func trigger_hurt_flash() -> void:
@@ -158,6 +167,9 @@ func _sample_liquid() -> Dictionary:
 func _physics_process(delta: float) -> void:
 	if _hurt_timer > 0.0:
 		_hurt_timer = maxf(_hurt_timer - delta, 0.0)
+	if recoil.length_squared() > 0.01:
+		recoil = recoil.move_toward(Vector2.ZERO, RECOIL_RETURN * delta)
+		_update_visual()
 	if not physics_enabled or sim == null or not sim.has_world():
 		_update_visual()
 		return
@@ -302,10 +314,12 @@ func _move_vertical(total_dy: float) -> bool:
 func _update_visual() -> void:
 	if _body_rect != null:
 		_body_rect.color = HURT_COLOR if _hurt_timer > 0.0 else BODY_COLOR
+		_body_rect.position = Vector2(float(-2 * SCALE), float(-10 * SCALE)) + recoil
 	if _eye_rect != null:
 		var ox := 1.0 if facing.x >= 0.0 else -2.0
-		_eye_rect.position = Vector2(ox * float(SCALE), float(-8 * SCALE))
+		_eye_rect.position = Vector2(ox * float(SCALE), float(-8 * SCALE)) + recoil
 	if _jet_rect != null:
+		_jet_rect.position = Vector2(float(-1 * SCALE), 0.0) + recoil
 		_jet_rect.visible = is_thrusting
 		if is_thrusting:
 			var flick := 1.0 + 0.35 * sin(float(Time.get_ticks_msec()) * 0.05)
