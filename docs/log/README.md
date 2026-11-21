@@ -7,7 +7,10 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-21 | [2026-11-21-09-review-new-proposals-and-next-order.md](2026-11-21-09-review-new-proposals-and-next-order.md) | 评审 + 建议 | 摘要 | 评审跳跃跟手/环境表现层/打击感三份新文档：建议主攻 M1-06，仅顺手带跳跃 P0，环境表现留 M1-11/M2、打击感保留现版 |
 | 2026-11-21 | [2026-11-21-08-game-decision-research-skill.md](2026-11-21-08-game-decision-research-skill.md) | 建议 + 更新 | 详细 | DeepSeek Harness 项目技能，跨平台取证、方案卡与本作 A/B，首例为 M1-10 打击感 |
+| 2026-11-21 | [2026-11-21-07-visual-production.md](2026-11-21-07-visual-production.md) | 调研 + 建议 | 详细 | 视觉与动效生产路线：把"审美复刻"视频拆成决策卡（3 候选 + 5 维比较 + 一周最小验证），推荐程序化最小切片、整屏复刻留 M2 |
+| 2026-11-21 | [2026-11-21-06-jump-feel.md](2026-11-21-06-jump-feel.md) | 建议 + 评审 | 详细 | 跳跃跟手：抖音视频（无旁白，逐帧 OCR）6 条"看不见的帮助"对照 player.gd——已有 2 / 半有 1 / 缺 3；另指出轮询吞键是"按了没跳"的第一性来源，并按"机动性偏高"反馈把 6 条拆成增宽容 / 增机动两批 |
 | 2026-11-21 | [2026-11-21-05-playtest-physics-fluid-settle-fixes.md](2026-11-21-05-playtest-physics-fluid-settle-fixes.md) | 更新 + 评审 | 详细 | 实机试玩反馈修复：开局 120 tick 全图预沉降与防掩埋校准、液体双向找平与自底向上 chunk 排序、解除火焰实墙与环境 DoT 顿帧阻塞；机动性待 M1-06 实测再定 |
 | 2026-11-21 | [2026-11-21-04-m1-10-feedback-juice.md](2026-11-21-04-m1-10-feedback-juice.md) | 更新 + 决策 | 详细 | M1-10 反馈层提前落地：两条抖音参考（射击爽感 / 打击感）并成 8 层，fx + 屏幕 FX + 分层音效 + 反馈导演，含 3 条偏离与 smoke 断言 |
 | 2026-11-21 | [2026-11-21-03-m1-04-wang-tile-coalmine.md](2026-11-21-03-m1-04-wang-tile-coalmine.md) | 更新 | 详细 | M1-04 落地：矿井一层 1536×672 完整 Wang Tile 拓扑、3 手工房无缝拼接、旱魃 BOSS 房、5-seed BFS 连通校验、碑文与三大 Hazard |

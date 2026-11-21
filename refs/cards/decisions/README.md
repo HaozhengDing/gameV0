@@ -5,6 +5,7 @@
 | 抉择 | 卡片 |
 |---|---|
 | 2D 战斗打击感与命中辨认 | [combat-hit-feedback.md](combat-hit-feedback.md) |
+| 视觉与动效生产路线（矿井环境表现层） | [visual-production.md](visual-production.md) |
 
 ## 主题记录
 
