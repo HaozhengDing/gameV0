@@ -7,6 +7,9 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-21 | [2026-11-21-19-multi-character-archetypes-assessment.md](2026-11-21-19-multi-character-archetypes-assessment.md) | 建议 + 评审 | 摘要 | 评估多角色选择系统设想（方士/纯近战/纯触手邪神子嗣）：架构天然可插拔、零改 sim_core，建议排入 M3/M4 并在近战/触手中紧扣 D1 元素沙盒 |
+| 2026-11-21 | [2026-11-21-18-hit-feel-overlap-audit.md](2026-11-21-18-hit-feel-overlap-audit.md) | 评审 | 摘要 | 打击感同题材视频去重：6 层重叠 6/6、不新开卡；唯一新增检查点是敌人受击的击退/后仰（本作只做了白闪） |
+| 2026-11-21 | [2026-11-21-17-vfx-implementation.md](2026-11-21-17-vfx-implementation.md) | 调研 + 建议 | 详细 | 特效实现方式：视频（转写两次失败）反查到开源 pixelfx（8587★/MIT/JS），拆成 3 候选卡；结论"程序化为主、pixelfx 只当草稿生成器、序列帧留给过场" |
 | 2026-11-21 | [2026-11-21-16-m1-alpha-polish-and-github-tools-review.md](2026-11-21-16-m1-alpha-polish-and-github-tools-review.md) | 更新 + 评审 | 详细 | M1-α 三项体验打磨一次性落地（粉末三级密度减速同步玩家+小怪、旱魃空间效用 AI、浮空收敛+延迟下落慢充与防无限飞，17 步全过）+ 评估 GitHub 工具链与技能建议 |
 | 2026-11-21 | [2026-11-21-15-tooling-backlog-registered.md](2026-11-21-15-tooling-backlog-registered.md) | 建议 | 摘要 | 工具链清单登记为 M1 计划附录 A（后续建议，未排期） |
 | 2026-11-21 | [2026-11-21-14-gamedev-tools-scan.md](2026-11-21-14-gamedev-tools-scan.md) | 建议 | 详细 | GitHub 游戏开发工具清单：godot-mcp/GodotPrompter、CI 导出、LimboAI、LDtk/Pixelorama、Tracy+nanobench |
