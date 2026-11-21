@@ -190,7 +190,7 @@ func _tick_once() -> void:
 	if player != null and player.has_method("tick_invuln"):
 		player.tick_invuln()
 	if enemy_manager != null and not completed and not smoke_mode:
-		enemy_manager.step_tick(Vector2(pc), sim.get_tick())
+		enemy_manager.step_tick(Vector2(pc), sim.get_tick(), player.velocity)
 	if combat != null:
 		combat.step_tick()
 	vm.tick_advance()
@@ -1734,6 +1734,136 @@ func _run_smoke() -> void:
 			print("T4B_SMOKE_STEP m1-jump-feel_P0 coyote=ok buffer=ok var_jump=%.1f<%.1f" % [rise_short, rise_full])
 		if jf_fail != "":
 			fail = jf_fail
+
+	# M1-α 三项打磨断言：粉末三级密度减速（玩家+小怪）/ 浮空收敛+下落慢充+防无限飞 / 旱魃空间AI与湿破甲脱困
+	if fail == "":
+		var a_fail := ""
+		var mat_rock_a: int = sim.material_id("rock")
+		var mat_coal_a: int = sim.material_id("coal")
+		var mat_sul_a: int = sim.material_id("sulfur")
+		var mat_cin_a: int = sim.material_id("cinnabar")
+		var mat_wat_a: int = sim.material_id("water")
+
+		# 17a) 粉末分级减速（煤 > 硫磺 > 朱砂，且均不卡死）+ 地面小怪同步受重粉减速
+		for gy in range(295, 323):
+			for gx in range(420, 560):
+				sim.set_cell(gx, gy, mat_rock_a if gy >= 316 else 0)
+		var wades: Array[float] = []
+		for mat_id_t in [mat_coal_a, mat_sul_a, mat_cin_a]:
+			for gy in range(304, 316):
+				for gx in range(430, 520):
+					sim.set_cell(gx, gy, mat_id_t)
+			player.set_cell_pos(Vector2i(436, 315))
+			player.reset_motion()
+			var x0_w: float = player.position.x
+			for _i in range(24):
+				player.step_physics(FIXED_DT, 1.0, false, false)
+			wades.append((player.position.x - x0_w) / float(SCALE))
+		# 地面小怪在朱砂堆中同样涉过且显著减速
+		combat.reset_round()
+		enemy_manager.reset_round()
+		var cin_ghost = enemy_manager.spawn_by_id("enemy-coal-ghost", Vector2i(452, 315), "smoke_cin_ghost", 5)
+		var cin_ai = enemy_manager.get_ai_for("smoke_cin_ghost")
+		var cin_x0: float = cin_ghost.pos.x
+		for _i in range(20):
+			enemy_manager.step_tick(Vector2(500.0, 315.0), sim.get_tick())
+		var mob_cin_slow: bool = cin_ai != null and cin_ai.powder_speed_mult < 0.55 and cin_ghost.pos.x > cin_x0 + 1.0
+
+		# 17b) 浮空收敛（单气爬 80..130 格）+ 延迟下落慢充 + 高频点按防无限滞空
+		for gy in range(130, 323):
+			for gx in range(340, 375):
+				sim.set_cell(gx, gy, mat_rock_a if (gy >= 316 or gy <= 132) else 0)
+		player.set_cell_pos(Vector2i(356, 315))
+		player.reset_motion()
+		for _s in range(4):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		var climb_y0: float = player.position.y
+		var climb_min_y: float = climb_y0
+		for _i in range(110):
+			player.step_physics(FIXED_DT, 0.0, player.levitate > 0.5, false)
+			climb_min_y = minf(climb_min_y, player.position.y)
+		var single_tank_climb: float = (climb_y0 - climb_min_y) / float(SCALE)
+
+		# 下落慢充：前 14 帧(0.23s < 0.28s)不回充，60 帧(1.0s)后明确慢回充
+		player.set_cell_pos(Vector2i(356, 160))
+		player.reset_motion()
+		player.levitate = 40.0
+		player.step_physics(FIXED_DT, 0.0, true, false)  # 触发一次推力启动延迟计时
+		var lev_after_tap: float = player.levitate
+		for _i in range(14):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		var lev_at_delay: float = player.levitate
+		for _i in range(46):
+			player.step_physics(FIXED_DT, 0.0, false, false)
+		var lev_after_fall: float = player.levitate
+		var fall_regen_ok: bool = absf(lev_at_delay - lev_after_tap) < 0.05 and (lev_after_fall - lev_at_delay) >= 6.0 and (lev_after_fall - lev_at_delay) <= 18.0
+
+		# 防无限飞：空旷高井高频点按循环（推 8 帧 + 落 24 帧 × 10 轮），净高度必下降且气槽耗尽
+		player.set_cell_pos(Vector2i(356, 160))
+		player.reset_motion()
+		var tap_y0: float = player.position.y
+		for cycle in range(10):
+			for f in range(32):
+				player.step_physics(FIXED_DT, 0.0, f < 8, false)
+		var tap_drop_cells: float = (player.position.y - tap_y0) / float(SCALE)
+		var no_inf_flight: bool = tap_drop_cells > 40.0 and player.levitate < 25.0
+
+		# 17c) 旱魃空间效用 AI：高台玩家反制 + 湿破甲硬直后主动跃离水洼
+		for gy in range(195, 277):
+			for gx in range(118, 263):
+				var bdr := (gy >= 272 or gy <= 198 or gx <= 120 or gx >= 260)
+				sim.set_cell(gx, gy, mat_rock_a if bdr else 0)
+		combat.reset_round()
+		enemy_manager.reset_round()
+		var s_boss = enemy_manager.spawn_by_id("enemy-drought-demon", Vector2i(210, 271), "smoke_smart_boss", 6)
+		var s_boss_ai = enemy_manager.get_boss_ai()
+		s_boss_ai.cooldown_ticks = 0
+		var high_counter_ok := false
+		for _t in range(45):
+			sim.step_tick()
+			enemy_manager.step_tick(Vector2(170.0, 224.0), sim.get_tick())
+			combat.step_tick()
+			if s_boss_ai.active_boss_move in ["platform_leap", "fan_fire"] and s_boss_ai.state in ["telegraph", "attack"]:
+				high_counter_ok = true
+				break
+		# 湿破甲硬直与离水跳
+		for gy in range(266, 272):
+			for gx in range(198, 222):
+				sim.set_cell(gx, gy, mat_wat_a)
+		s_boss.pos = Vector2(210.0, 271.0)
+		s_boss.vel = Vector2.ZERO
+		s_boss_ai.state = "chase"
+		s_boss_ai.wet_flinch_cd = 0
+		s_boss_ai.was_wet = false
+		var saw_flinch := false
+		var saw_escape := false
+		for _t in range(65):
+			sim.step_tick()
+			combat.step_tick()
+			enemy_manager.step_tick(Vector2(150.0, 271.0), sim.get_tick())
+			if s_boss_ai.state == "flinch":
+				saw_flinch = true
+			if s_boss_ai.active_boss_move == "escape_leap" and float(s_boss.vel.y) < -30.0:
+				saw_escape = true
+
+		if not (wades[0] > wades[1] and wades[1] > wades[2] and wades[2] > 3.0):
+			a_fail = "M1-α 粉末分级减速阶梯异常（coal=%.1f sul=%.1f cin=%.1f）" % [wades[0], wades[1], wades[2]]
+		elif not mob_cin_slow:
+			a_fail = "M1-α 地面小怪同步重粉减速失败"
+		elif single_tank_climb < 78.0 or single_tank_climb > 135.0:
+			a_fail = "M1-α 单管浮空爬高越界（%.1f 格，目标 78..135）" % single_tank_climb
+		elif not fall_regen_ok:
+			a_fail = "M1-α 延迟下落慢充异常（tap=%.1f delay=%.1f fall=%.1f）" % [lev_after_tap, lev_at_delay, lev_after_fall]
+		elif not no_inf_flight:
+			a_fail = "M1-α 防无限飞断言失败（drop=%.1f lev=%.1f）" % [tap_drop_cells, player.levitate]
+		elif not high_counter_ok or not saw_flinch or not saw_escape:
+			a_fail = "M1-α 旱魃空间AI异常（high=%s flinch=%s escape=%s）" % [str(high_counter_ok), str(saw_flinch), str(saw_escape)]
+		else:
+			print("T4B_SMOKE_STEP M1-α三项打磨 wade=%.1f>%.1f>%.1f mob_slow=ok climb=%.1f fall_regen=+%.1f no_inf=ok boss_smart=ok" % [
+				wades[0], wades[1], wades[2], single_tank_climb, lev_after_fall - lev_at_delay
+			])
+		if a_fail != "":
+			fail = a_fail
 
 	# 复位 vitals 供末尾统一汇报
 	vitals.reset()

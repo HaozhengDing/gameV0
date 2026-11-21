@@ -27,7 +27,16 @@
     "start_items": [
       "gourd",
       "earth_escape_seal"
-    ]
+    ],
+    "move_speed": 60.0,
+    "hover_max_up": -76.0,
+    "hover_accel": 390.0,
+    "levitate_max": 100.0,
+    "levitate_drain_per_sec": 86.0,
+    "levitate_regen_ground_per_sec": 145.0,
+    "levitate_regen_fall_per_sec": 16.0,
+    "air_regen_delay_sec": 0.28,
+    "powder_drag_tiers": [0.75, 0.55, 0.35]
   },
   "sanity": {
     "thresholds": {
@@ -222,6 +231,7 @@
     "sanity.possession：入魔由设计原文的「另一条路线」改为可逆状态（参考饥荒理智系统）：神智 0 入魔、≥20 出魔；入魔时幻觉敌人变实，击杀 +10 神智并掉魇烬；阴性敌人中立；每 30 秒失控 1 秒；禁符改付 0.5 盏魄灯；每次入魔本局神智上限 −10（最多 −30）。见 S-0004。",
     "economy：烧银换冥钱平时 1:10、子时 1:20（设计原文 3.6 写作「子时 1:5」，方向写反——子时鬼门开，阴间交易应更划算；批注 C34）。只能银换冥钱，不能反向兑换，防止昼夜套利（批注 C16）。双货币属 M2 内容，数值先占位。",
     "sanity.possession（2026-11-20 D-M1-1 拍板）：M1 精简为 4 条核心效果（心魔变实击杀+10神智、阴物中立、禁符改熄0.5盏灯、魔痕-10上限最多-30），设置 lose_control_enabled=false 与 yan_jin_enabled=false 暂不做失控与魇烬；复议条件 = M1-08 实机自测后。",
-    "fire_heat（2026-11-20 D-M1-3 拍板）：新增 M1-12 热/火占位参数（fire_source_heat=400、burning 2% 最大生命/s 持续 5s、wet 5s 防点燃），源自 docs/tech/sim-fire-heat-design.md；复议条件 = M1-12 实机调参。"
+    "fire_heat（2026-11-20 D-M1-3 拍板）：新增 M1-12 热/火占位参数（fire_source_heat=400、burning 2% 最大生命/s 持续 5s、wet 5s 防点燃），源自 docs/tech/sim-fire-heat-design.md；复议条件 = M1-12 实机调参。",
+    "player.movement（2026-11-21 M1-α 三项打磨）：基于连续两次试玩反馈收敛机动性（move_speed 68->60、hover_max_up -96->-76、levitate_drain 52->86/s 约 1.16s 续航）并参照 Noita 加入 0.28s 延迟下落慢充（16/s，不足消耗 1/5 防无限飞）；松散粉末由硬阻挡改为 3 档密度减速（0.75/0.55/0.35，玩家与地面小怪同步）；复议条件 = 制作人 M1-α 复测。"
   ]
 }

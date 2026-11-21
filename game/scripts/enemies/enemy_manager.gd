@@ -10,6 +10,7 @@ const ACTIVE_AI_DIST := 320.0
 const BOSS_HUD_DIST := 250.0
 
 const EnemyAIScript := preload("res://scripts/enemies/enemy_ai.gd")
+const PowderPhysics := preload("res://scripts/powder_physics.gd")
 
 var sim: SimWorldNode
 var combat
@@ -25,6 +26,8 @@ var boss_ent = null                   # 旱魃 CombatEntity 引用
 var boss_killed: bool = false
 var silver_collected: int = 0
 var _mat_quicksilver: int = -1
+var _mat_water: int = -1
+var _density_by_id: Dictionary = {}
 var _dropped_ids: Dictionary = {}     # entity_id -> true，防止重复结算掉落
 
 func setup(p_sim: SimWorldNode, p_combat, p_event_bus, p_text_db, p_hud, p_wand_manager = null) -> void:
@@ -34,8 +37,18 @@ func setup(p_sim: SimWorldNode, p_combat, p_event_bus, p_text_db, p_hud, p_wand_
 	text_db = p_text_db
 	hud = p_hud
 	wand_manager = p_wand_manager
-	_mat_quicksilver = sim.material_id("quicksilver") if (sim != null and sim.has_world()) else -1
+	_refresh_material_cache()
 	load_definitions()
+
+func _refresh_material_cache() -> void:
+	if sim != null and sim.has_world():
+		_mat_quicksilver = sim.material_id("quicksilver")
+		_mat_water = sim.material_id("water")
+		_density_by_id = PowderPhysics.build_density_table(sim)
+	else:
+		_mat_quicksilver = -1
+		_mat_water = -1
+		_density_by_id.clear()
 
 func load_definitions() -> bool:
 	defs.clear()
@@ -62,8 +75,7 @@ func reset_round() -> void:
 	boss_killed = false
 	silver_collected = 0
 	_dropped_ids.clear()
-	if sim != null and sim.has_world():
-		_mat_quicksilver = sim.material_id("quicksilver")
+	_refresh_material_cache()
 
 func spawn_by_id(def_id: String, pos: Vector2i, custom_id: String = "", seed_offset: int = 0):
 	if combat == null or not defs.has(def_id):
@@ -173,7 +185,7 @@ func _lift_flyer_spawn(floor_pos: Vector2i, hw: int, hh: int) -> Vector2i:
 			return cand
 	return best
 
-func step_tick(player_pos: Vector2, tick: int) -> void:
+func step_tick(player_pos: Vector2, tick: int, player_vel: Vector2 = Vector2.ZERO) -> void:
 	if sim == null or not sim.has_world():
 		return
 	var log_cb := func(msg: String) -> void:
@@ -184,7 +196,19 @@ func step_tick(player_pos: Vector2, tick: int) -> void:
 			continue
 		var dist: float = ai.ent.pos.distance_to(player_pos)
 		if dist <= ACTIVE_AI_DIST or ai.ent.aggroed:
-			ai.step_tick(sim, combat, player_pos, tick, event_bus, _mat_quicksilver, player_hit_callback, log_cb)
+			ai.step_tick(sim, combat, player_pos, tick, event_bus, _mat_quicksilver,
+					player_hit_callback, log_cb, player_vel, _mat_water, _density_by_id)
+
+func get_ai_for(entity_id: String):
+	for ai in ais:
+		if ai.ent != null and ai.ent.entity_id == entity_id:
+			return ai
+	return null
+
+func get_boss_ai():
+	if boss_ent == null:
+		return null
+	return get_ai_for(boss_ent.entity_id)
 
 func on_entity_killed(target_id: String) -> Dictionary:
 	var reward := {"silver": 0, "materials": [], "talisman": "", "is_boss": false}

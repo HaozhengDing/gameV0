@@ -1,7 +1,8 @@
 # 下落固体（粉末）穿行与分级减速
 
 > 主题：**像素沙盒中松散粉末（煤、硫磺、硝石、沙、石灰、糯米、朱砂）与角色/敌人碰撞时，应按硬固体挡路还是改为可穿行的分级阻力介质**
-> 日期：2026-11-21｜状态：**待试验**｜触发：制作人 M1-α 实机试玩反馈 #1（「下落的固体好像太硬了，能挡路，可以找参考做不同程度减速」）
+> 日期：2026-11-21｜状态：**已试验（M1-α 已落地玩家+地面小怪同步，待制作人实机定型）**｜触发：制作人 M1-α 实机试玩反馈 #1（「下落的固体好像太硬了，能挡路，可以找参考做不同程度减速」）
+> 实装与试验结果：`game/scripts/powder_physics.gd` + `player.gd` + `enemy_ai.gd`（开关 `powder_wade_enabled`）；`--t4b-smoke` 第 17a 步通过：`wade=16.3>12.3>8.1`（煤 > 硫磺 > 朱砂三级阶梯不卡死）、`mob_slow=ok`（矿鬼在朱砂中 `<0.55×` 减速涉过）。
 > 关联：`docs/01-decision-twist.md` D1 可读优先 / 物质语义一致；`data/materials.json` 物质密度表；`game/gdextension/src/sim_node.cpp`、`game/scripts/player.gd`、`game/scripts/enemies/enemy_ai.gd`
 
 ## 当前选择与理由

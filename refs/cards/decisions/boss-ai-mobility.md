@@ -1,7 +1,8 @@
 # 2D 动作沙盒 BOSS AI 与机动性（旱魃）
 
 > 主题：**矿底一层 BOSS「旱魃」如何摆脱死板轮换与笨重移动，在不破坏 D1 可读性的前提下形成有空间博弈、机动压迫与元素对话感的 BOSS 战**
-> 日期：2026-11-21｜状态：**待试验**｜触发：制作人 M1-α 实机试玩反馈 #2（「boss 逻辑有点蠢，机动性略低，可以尝试找参考；小怪不错」）
+> 日期：2026-11-21｜状态：**已试验（M1-α 已落地，待制作人实机定型）**｜触发：制作人 M1-α 实机试玩反馈 #2（「boss 逻辑有点蠢，机动性略低，可以尝试找参考；小怪不错」）
+> 实装与试验结果：`game/scripts/enemies/enemy_ai.gd` + `data/entities/layer01.json`（开关 `boss_smart_ai`）；`--t4b-smoke` 第 17c 步通过：`boss_smart=ok`（高台玩家反制 + 湿破甲 0.55s 硬直 + 跃离水洼 + P2 引燃竹台不挖岩坝）。
 > 关联：`docs/01-decision-twist.md` D1 可读优先；`data/entities/layer01.json`、`data/rooms/room-boss-coalmine.json`、`game/scripts/enemies/enemy_ai.gd`
 
 ## 当前选择与理由
