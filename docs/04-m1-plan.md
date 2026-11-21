@@ -118,3 +118,19 @@ flowchart LR
 - **M1 退出门采用「仅制作人自测 + 自动化冒烟」（D-M1-5）**：偏离 `docs/03-roadmap.md` §1「M1 外部试玩多数人主动想再来一局」，把外部试玩统一后移到 M2 Demo 门；复议条件 = M1-α 自测发现方向分歧时随时提前拉外部玩家。
 - **M1-10 反馈层骨架提前到 W6 落地**：打击感/射击爽感六层（火光、后坐、定向震屏、命中、击杀、分层音效）+ 本作专属的反应环与熄灯/反噬共 8 层，已作为 `game/scripts/feedback/` 交付（规范见 `docs/tech/m1-feedback-juice.md`）。偏离原排期的地方只在时间（W10 → W6 骨架 + W10 收尾），范围未变；代价 = 3 条表现层偏离（不做全屏强闪、顿帧用全局 `Engine.time_scale`、音效运行时合成），复议条件见规范文档 §4。
 - **可逆入魔 M1 暂不做「每 30s 失控 1s」与「魇烬」（D-M1-1）**：偏离 S-0004 草案的 5 条全量；保留 4 条核心效果（心魔变实击杀回神智/阴物中立/禁符熄灯/魔痕），已写入 `data/magic_numbers.json` 的 `v1_deviations`，复议条件 = M1-08 实机自测后评估是否补回。
+
+## 附录 A：工具链后续建议（2026-11-21，非 M1 任务、未排期）
+
+> 来源：用户要求把 GitHub 游戏开发工具清单登记为「后续建议」。**本附录不改变 M1 范围、关键路径或门标准**；任何工具的实际引入（尤其会改依赖/CI/工程结构的）都需要用户拍板。完整清单与许可证说明见 [`docs/research/oss-gamedev-tools-2026-11.md`](../research/oss-gamedev-tools-2026-11.md)。
+
+| 优先级 | 工具（★/许可） | 用途 | 建议评估时机 | 前置条件/风险 |
+|---|---|---|---|---|
+| 1 | [Coding-Solo/godot-mcp](https://github.com/Coding-Solo/godot-mcp)（6.7k/MIT） | MCP：AI 启动 Godot 编辑器/跑项目/抓调试输出/改场景 | M1-α 视觉/手感迭代前，做一次 1–2 小时小试验 | 需要 MCP 客户端配置；能启动引擎/读写项目，需限定项目目录与 allowlist |
+| 2 | [jame581/GodotPrompter](https://github.com/jame581/GodotPrompter)（981/MIT） | 面向 AI coding agent 的 Godot 领域 skills（测试/CI/导出/LimboAI），支持 Antigravity | 同上，可作为 Antigravity 的 skills 补充 | 它的工作流未必匹配我们的契约/目录，需要裁剪后再用 |
+| 3 | [Tracy](https://github.com/wolfpld/tracy)（17.2k/BSD-3）+ [nanobench](https://github.com/martinus/nanobench)（1.8k/MIT） | C-SIM/VM 帧级/微基准 profiling | D4 目标机到位前，先在开发机固定热点与基准 | Tracy 需带编译开关重编引擎；nanobench 可单头文件接入 |
+| 4 | [LDtk](https://github.com/deepnight/ldtk)（5.0k/MIT） | 2D 关卡编辑器（JSON 输出） | M1-04 关卡迭代或 M2 内容加速 | 需要写 JSON → `data/rooms/` 的导入管线；LDtk 是工具，产出物许可自控 |
+| 5 | [Pixelorama](https://github.com/Orama-Interactive/Pixelorama)（11.2k/MIT）+ [Material Maker](https://github.com/RodZill4/material-maker)（6.3k/MIT） | 像素美术与程序化材质 | M1-α 后做灰盒→美术时 | 工具 MIT；产出资产自行管理 |
+
+**明确不同意的点**：不引入需要 Godot 4.7+ 的 `hi-godot/godot-ai`（我们当前 4.5）；不改 `.github/workflows`（deploy key 无 workflow scope，需用户本人操作）；不为了工具改已冻结契约。
+
+

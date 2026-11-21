@@ -7,6 +7,8 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-21 | [2026-11-21-15-tooling-backlog-registered.md](2026-11-21-15-tooling-backlog-registered.md) | 建议 | 摘要 | 工具链清单登记为 M1 计划附录 A（后续建议，未排期） |
+| 2026-11-21 | [2026-11-21-14-gamedev-tools-scan.md](2026-11-21-14-gamedev-tools-scan.md) | 建议 | 详细 | GitHub 游戏开发工具清单：godot-mcp/GodotPrompter、CI 导出、LimboAI、LDtk/Pixelorama、Tracy+nanobench |
 | 2026-11-21 | [2026-11-21-13-github-oss-scan.md](2026-11-21-13-github-oss-scan.md) | 建议 | 详细 | GitHub 开源扫描：最贴近的是 sand-slide（Godot+GDExtension）、CellularFX、Noita wand sim、Night-Patrol；附许可证红线 |
 | 2026-11-21 | [2026-11-21-12-playtest-alpha-research-cards.md](2026-11-21-12-playtest-alpha-research-cards.md) | 建议 + 评审 | 详细 | 按 game-decision-research 产出 M1-α 试玩三张决策卡：粉末密度分级减速、旱魃空间效用 AI 与机动性、人物浮空收敛与 Noita 式延迟下落慢充 |
 | 2026-11-21 | [2026-11-21-11-m1-06-enemies-boss-and-jump-p0.md](2026-11-21-11-m1-06-enemies-boss-and-jump-p0.md) | 更新 + 决策 | 详细 | M1-06 落地（矿井一层 5 种敌人 AI、旱魃两阶段 BOSS 战与泼水破甲、BOSS 血条与掉落）+ 跳跃跟手 P0 + 修复 event_bus 字段透传与 BOSS 房水坝；抵达 M1-α 检查点 |
