@@ -17,8 +17,11 @@ const FONT_SIZE_COMPLETE := 56
 
 const PANEL_BG := Color(0.06, 0.06, 0.09, 0.72)
 const BAR_TRACK := Color(0.16, 0.16, 0.20, 0.92)
-const COL_HP_ON := Color(0.92, 0.36, 0.26)
-const COL_HP_OFF := Color(0.24, 0.21, 0.22)
+const COL_HP_ON := Color(0.92, 0.34, 0.24)
+const COL_HP_CAP_BG := Color(0.30, 0.14, 0.14, 0.92)
+const COL_HP_LOCKED := Color(0.10, 0.10, 0.12, 0.95)
+const COL_LANTERN_ON := Color(0.98, 0.72, 0.26)
+const COL_LANTERN_OFF := Color(0.20, 0.18, 0.20)
 const COL_MANA := Color(0.30, 0.64, 0.98)
 const COL_MANA_CD := Color(0.46, 0.44, 0.68)
 const COL_LEV := Color(0.96, 0.80, 0.26)
@@ -34,8 +37,12 @@ const COL_ST_POISON := Color(0.56, 0.72, 0.24, 0.90)
 
 const HELP_TEXT := "A/D 走 | W/Space 浮空 | 1-4 切符 | 左键 施法 | E 吸 | Q 喷 | Tab 水/油 | F 点火 | R 重开"
 
-# 左上资源条节点
-var _hp_cells: Array[ColorRect] = []
+# 左上资源条节点（M1-05：7 盏魄灯 + 气血红条含上限锁段 + 法力 + 浮空 + 葫芦）
+var _lantern_bgs: Array[ColorRect] = []
+var _lantern_fills: Array[ColorRect] = []
+var _lantern_label: Label
+var _hp_cap_bg: ColorRect
+var _hp_fill: ColorRect
 var _hp_label: Label
 var _mana_fill: ColorRect
 var _mana_label: Label
@@ -81,39 +88,50 @@ func _ready() -> void:
 	_build_complete(vs)
 
 func _build_resource_card() -> void:
-	_make_rect(Vector2(14, 12), Vector2(316, 114), PANEL_BG)
+	_make_rect(Vector2(14, 12), Vector2(332, 138), PANEL_BG)
 
-	# Row 1：7 格血/灯条 + 数字
-	_hp_cells.clear()
+	# Row 1：7 盏魄灯（支持小数残灯填充）+ 数字
+	_lantern_bgs.clear()
+	_lantern_fills.clear()
 	for i in range(LANTERNS_MAX):
-		var cell := _make_rect(Vector2(24 + i * 31, 22), Vector2(27, 14), COL_HP_ON)
-		_hp_cells.append(cell)
-	_hp_label = _make_label(Vector2(248, 16), FONT_SIZE_NUM, Color(0.96, 0.90, 0.86))
-	_hp_label.text = "7/7"
+		var lx := 24.0 + float(i) * 31.0
+		var lbg := _make_rect(Vector2(lx, 20), Vector2(27, 12), COL_LANTERN_OFF)
+		var lfill := _make_rect(Vector2(lx, 20), Vector2(27, 12), COL_LANTERN_ON)
+		_lantern_bgs.append(lbg)
+		_lantern_fills.append(lfill)
+	_lantern_label = _make_label(Vector2(248, 13), 18, Color(0.98, 0.86, 0.56))
+	_lantern_label.text = "7/7"
 
-	# Row 2：法力蓝条 + 数字
-	_make_rect(Vector2(24, 46), Vector2(BAR_W, 12), BAR_TRACK)
-	_mana_fill = _make_rect(Vector2(24, 46), Vector2(BAR_W, 12), COL_MANA)
-	_mana_label = _make_label(Vector2(248, 39), FONT_SIZE_NUM, Color(0.76, 0.88, 0.98))
+	# Row 2：气血红条（深灰底=因熄灯锁死的上限、暗红=当前有效上限、亮红=当前气血）+ 数字
+	_make_rect(Vector2(24, 42), Vector2(BAR_W, 14), COL_HP_LOCKED)
+	_hp_cap_bg = _make_rect(Vector2(24, 42), Vector2(BAR_W, 14), COL_HP_CAP_BG)
+	_hp_fill = _make_rect(Vector2(24, 42), Vector2(BAR_W, 14), COL_HP_ON)
+	_hp_label = _make_label(Vector2(248, 36), FONT_SIZE_NUM, Color(0.96, 0.90, 0.86))
+	_hp_label.text = "100/100"
+
+	# Row 3：法力蓝条 + 数字
+	_make_rect(Vector2(24, 66), Vector2(BAR_W, 12), BAR_TRACK)
+	_mana_fill = _make_rect(Vector2(24, 66), Vector2(BAR_W, 12), COL_MANA)
+	_mana_label = _make_label(Vector2(248, 59), FONT_SIZE_NUM, Color(0.76, 0.88, 0.98))
 	_mana_label.text = "80/80"
 
-	# Row 3：浮空黄条 + 百分比
-	_make_rect(Vector2(24, 68), Vector2(BAR_W, 10), BAR_TRACK)
-	_lev_fill = _make_rect(Vector2(24, 68), Vector2(BAR_W, 10), COL_LEV)
-	_lev_label = _make_label(Vector2(248, 60), 18, Color(0.96, 0.88, 0.56))
+	# Row 4：浮空黄条 + 百分比
+	_make_rect(Vector2(24, 88), Vector2(BAR_W, 10), BAR_TRACK)
+	_lev_fill = _make_rect(Vector2(24, 88), Vector2(BAR_W, 10), COL_LEV)
+	_lev_label = _make_label(Vector2(248, 80), 18, Color(0.96, 0.88, 0.56))
 	_lev_label.text = "100%"
 
-	# Row 4：葫芦水 / 油双条（选中高亮框）
-	_water_border = _make_rect(Vector2(22, 88), Vector2(GOURD_W + 4, 28), COL_BORDER_SEL)
-	_make_rect(Vector2(24, 90), Vector2(GOURD_W, 24), BAR_TRACK)
-	_water_fill = _make_rect(Vector2(24, 90), Vector2(0, 24), COL_WATER)
-	_water_label = _make_label(Vector2(30, 90), 18, Color(0.94, 0.96, 1.0))
+	# Row 5：葫芦水 / 油双条（选中高亮框）
+	_water_border = _make_rect(Vector2(22, 110), Vector2(GOURD_W + 4, 28), COL_BORDER_SEL)
+	_make_rect(Vector2(24, 112), Vector2(GOURD_W, 24), BAR_TRACK)
+	_water_fill = _make_rect(Vector2(24, 112), Vector2(0, 24), COL_WATER)
+	_water_label = _make_label(Vector2(30, 112), 18, Color(0.94, 0.96, 1.0))
 	_water_label.text = "水 0/200"
 
-	_oil_border = _make_rect(Vector2(174, 88), Vector2(GOURD_W + 4, 28), COL_BORDER_DIM)
-	_make_rect(Vector2(176, 90), Vector2(GOURD_W, 24), BAR_TRACK)
-	_oil_fill = _make_rect(Vector2(176, 90), Vector2(0, 24), COL_OIL)
-	_oil_label = _make_label(Vector2(182, 90), 18, Color(0.96, 0.92, 0.84))
+	_oil_border = _make_rect(Vector2(174, 110), Vector2(GOURD_W + 4, 28), COL_BORDER_DIM)
+	_make_rect(Vector2(176, 112), Vector2(GOURD_W, 24), BAR_TRACK)
+	_oil_fill = _make_rect(Vector2(176, 112), Vector2(0, 24), COL_OIL)
+	_oil_label = _make_label(Vector2(182, 112), 18, Color(0.96, 0.92, 0.84))
 	_oil_label.text = "油 0/100"
 
 func _build_slots() -> void:
@@ -121,7 +139,7 @@ func _build_slots() -> void:
 	_slot_bgs.clear()
 	_slot_titles.clear()
 	_slot_costs.clear()
-	var x0 := 346.0
+	var x0 := 358.0
 	var slot_w := 148.0
 	var slot_h := 62.0
 	var gap := 10.0
@@ -158,9 +176,9 @@ func _build_right_info(vs: Vector2) -> void:
 	_exit_label.text = "出口 →"
 
 func _build_log_and_help(vs: Vector2) -> void:
-	_log_bg = _make_rect(Vector2(14, 134), Vector2(316, 84), Color(0.06, 0.06, 0.09, 0.56))
+	_log_bg = _make_rect(Vector2(14, 158), Vector2(316, 84), Color(0.06, 0.06, 0.09, 0.56))
 	_log_bg.visible = false
-	_log_label = _make_label(Vector2(22, 138), FONT_SIZE_LOG, Color(0.84, 0.90, 0.80))
+	_log_label = _make_label(Vector2(22, 162), FONT_SIZE_LOG, Color(0.84, 0.90, 0.80))
 
 	_make_rect(Vector2(0.0, vs.y - 34.0), Vector2(vs.x, 34.0), Color(0.05, 0.05, 0.08, 0.64))
 	var help_label := _make_label(Vector2(14, vs.y - 29.0), FONT_SIZE_HELP, Color(0.80, 0.80, 0.76))
@@ -209,14 +227,29 @@ func set_slots(names: Array, costs: Array) -> void:
 			_slot_titles[i].text = "%d  —" % (i + 1)
 			_slot_costs[i].text = ""
 
-## 更新全部彩色状态条、当前槽位高亮与右上材质/出口信息。
+## 更新全部彩色状态条、七星灯残烛与气血上限锁段、当前槽位高亮与右上材质/出口信息。
 func update_state(state: Dictionary) -> void:
-	var hp: int = int(state.get("hp", LANTERNS_MAX))
-	var hp_max: int = maxi(int(state.get("hp_max", LANTERNS_MAX)), 1)
-	for i in range(_hp_cells.size()):
-		_hp_cells[i].color = COL_HP_ON if i < hp else COL_HP_OFF
+	var lanterns: float = float(state.get("lanterns", float(LANTERNS_MAX)))
+	var lanterns_max: float = maxf(float(state.get("lanterns_max", float(LANTERNS_MAX))), 1.0)
+	for i in range(_lantern_fills.size()):
+		var frac := clampf(lanterns - float(i), 0.0, 1.0)
+		_lantern_fills[i].size.x = 27.0 * frac
+		_lantern_fills[i].visible = frac > 0.001
+	if _lantern_label != null:
+		if absf(lanterns - roundf(lanterns)) < 0.05:
+			_lantern_label.text = "%d/%d" % [roundi(lanterns), roundi(lanterns_max)]
+		else:
+			_lantern_label.text = "%.1f/%d" % [lanterns, roundi(lanterns_max)]
+
+	var hp: float = float(state.get("hp", 100.0))
+	var hp_eff_max: float = maxf(float(state.get("hp_eff_max", 100.0)), 0.0)
+	var hp_base_max: float = maxf(float(state.get("hp_base_max", 100.0)), 1.0)
+	if _hp_cap_bg != null:
+		_hp_cap_bg.size.x = BAR_W * clampf(hp_eff_max / hp_base_max, 0.0, 1.0)
+	if _hp_fill != null:
+		_hp_fill.size.x = BAR_W * clampf(hp / hp_base_max, 0.0, 1.0)
 	if _hp_label != null:
-		_hp_label.text = "%d/%d" % [hp, hp_max]
+		_hp_label.text = "%d/%d" % [roundi(hp), roundi(hp_eff_max)]
 
 	var mana: float = float(state.get("mana", 0.0))
 	var mana_max: float = maxf(float(state.get("mana_max", 1.0)), 1.0)

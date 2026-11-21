@@ -27,6 +27,7 @@ const OverlayScript := preload("res://scripts/overlay.gd")
 const EventBusScript := preload("res://scripts/event_bus.gd")
 const TextDBScript := preload("res://scripts/text_db.gd")
 const CombatManagerScript := preload("res://scripts/combat/combat_manager.gd")
+const VitalsScript := preload("res://scripts/vitals.gd")
 
 const REACTION_TEXT_KEYS := {
 	"r-black-powder": "$react_black_powder",
@@ -52,6 +53,7 @@ var overlay
 var event_bus
 var text_db
 var combat
+var vitals
 var exit_marker: ColorRect
 
 # 玩法状态
@@ -332,6 +334,9 @@ func _create_contracts() -> void:
 	text_db = TextDBScript.new()
 	if not text_db.load_locale():
 		push_error("T4B: C-TEXT 词表加载失败")
+	vitals = VitalsScript.new()
+	vitals.load_defaults_from_magic_numbers()
+	vitals.reset()
 
 func _create_vm() -> void:
 	vm = TalismanVMNode.new()
@@ -360,10 +365,12 @@ func _create_combat() -> void:
 	combat.z_index = 4
 	add_child(combat)
 	combat.setup(sim, event_bus, text_db, overlay, hud)
+	if vitals != null:
+		combat.player_heal_callback = func(amount: float) -> void: vitals.heal_hp(amount)
 
 func _create_executor() -> void:
 	executor = ExecutorScript.new()
-	executor.setup(sim, vm, level, player, hud, event_bus, text_db, combat)
+	executor.setup(sim, vm, level, player, hud, event_bus, text_db, combat, vitals)
 
 func _start_round() -> void:
 	completed = false
@@ -565,9 +572,16 @@ func _refresh_hud() -> void:
 		var st_key := "$status_" + String(st_id)
 		var st_label: String = text_db.get_text(st_key) if (text_db != null and text_db.has_key(st_key)) else String(st_id)
 		status_items.append({"id": String(st_id), "label": st_label})
+	var vsnap: Dictionary = vitals.snapshot() if vitals != null else {
+		"hp": 100.0, "hp_eff_max": 100.0, "hp_base_max": 100.0,
+		"lanterns": float(LANTERNS_MAX), "lanterns_max": float(LANTERNS_MAX),
+	}
 	hud.update_state({
-		"hp": executor.lanterns,
-		"hp_max": LANTERNS_MAX,
+		"hp": float(vsnap["hp"]),
+		"hp_eff_max": float(vsnap["hp_eff_max"]),
+		"hp_base_max": float(vsnap["hp_base_max"]),
+		"lanterns": float(vsnap["lanterns"]),
+		"lanterns_max": float(vsnap["lanterns_max"]),
 		"mana": vm.get_spirit(),
 		"mana_max": vm.get_spirit_max(),
 		"recharging": vm.get_is_recharging(),
@@ -1038,14 +1052,42 @@ func _run_smoke() -> void:
 					int(combat.stats["triggers_fired"]) - trig_before
 				])
 
+	# 11) M1-05 七星灯双轴回归：100 气血 / 0.2-0.5 小数阴伤熄灯 / 跨整盏上限 -1/7 / 回血受上限约束 / 复灯恢复
+	if fail == "":
+		vitals.reset()
+		event_bus.reset()
+		var d1: Dictionary = vitals.take_hp_damage(30.0, "火", "test_fire", sim.get_tick(), event_bus, "$ui_death_fire")
+		var y1: Dictionary = vitals.extinguish_lanterns(0.4, "test_yin", sim.get_tick(), event_bus)
+		var eff_after_partial: float = vitals.effective_max_hp()
+		var y2: Dictionary = vitals.extinguish_lanterns(0.6, "test_yin", sim.get_tick(), event_bus)
+		var eff_after_one: float = vitals.effective_max_hp()
+		vitals.heal_hp(999.0)
+		var hp_capped: float = vitals.hp
+		var restored: float = vitals.restore_lanterns(1.0, "hub", sim.get_tick(), event_bus)
+		var eff_after_restore: float = vitals.effective_max_hp()
+		var expected_6_7: float = 100.0 * 6.0 / 7.0
+		if absf(float(d1.get("applied", 0.0)) - 30.0) > 0.01 or absf(eff_after_partial - 100.0) > 0.01:
+			fail = "M1-05 普通伤/残烛上限异常（eff_partial=%.2f）" % eff_after_partial
+		elif int(y1.get("full_lost", 0)) != 0 or int(y2.get("full_lost", 0)) != 1:
+			fail = "M1-05 熄灯整盏门槛判定异常（y1=%s y2=%s）" % [str(y1), str(y2)]
+		elif absf(eff_after_one - expected_6_7) > 0.05 or absf(hp_capped - expected_6_7) > 0.05:
+			fail = "M1-05 熄1盏后上限或回血钳制异常（eff=%.2f hp=%.2f 期望=%.2f）" % [eff_after_one, hp_capped, expected_6_7]
+		elif absf(restored - 1.0) > 0.01 or absf(eff_after_restore - 100.0) > 0.01:
+			fail = "M1-05 复灯未恢复上限（restored=%.2f eff=%.2f）" % [restored, eff_after_restore]
+		elif event_bus.count_of("lantern_extinguished") != 2 or event_bus.count_of("lantern_restored") != 1:
+			fail = "M1-05 C-EVT 熄灯/复灯事件计数异常"
+		else:
+			vitals.reset()
+			print("T4B_SMOKE_STEP M1-05七星灯双轴 hp=100->70 eff_6of7=%.1f restore=100.0" % eff_after_one)
+
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)
 		print("T4B_SMOKE_FAIL " + fail)
 		_quit(1)
 		return
-	print("T4B_SMOKE_OK groups=%d water_gained=%d doused=%d fire_left=%d dug=%d lanterns=%d spirit=%.0f tick=%d completed=%s" % [
+	print("T4B_SMOKE_OK groups=%d water_gained=%d doused=%d fire_left=%d dug=%d hp=%.0f lanterns=%.1f spirit=%.0f tick=%d completed=%s" % [
 		group_ids.size(), water_gained, doused, fire_left, dug_total,
-		executor.lanterns, vm.get_spirit(), sim.get_tick(), str(completed)
+		vitals.hp, vitals.lanterns, vm.get_spirit(), sim.get_tick(), str(completed)
 	])
 	_quit(0)
 

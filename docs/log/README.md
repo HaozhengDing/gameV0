@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-21 | [2026-11-21-01-m1-05-seven-star-lanterns.md](2026-11-21-01-m1-05-seven-star-lanterns.md) | 更新 | 详细 | M1-05 落地：七星灯双轴（100 气血 + 7 盏小数魄灯，每熄 1 盏上限 -1/7）与极简灯格/锁段血条 HUD |
 | 2026-11-20 | [2026-11-20-09-m1-02-projectiles-and-combat.md](2026-11-20-09-m1-02-projectiles-and-combat.md) | 更新 | 详细 | M1-02 落地：真实投射物飞行/穿透/触发树、全 16 种 C-ACT 零 NOOP、战斗实体与 8/8 民俗反应全通 |
 | 2026-11-20 | [2026-11-20-08-m1-12-csim-v3-reactions.md](2026-11-20-08-m1-12-csim-v3-reactions.md) | 更新 | 详细 | M1-12 落地：C-SIM v3（19 材质/5 格层反应/热火引擎/10k 压测 burn-worst p95 0.82ms）+ GDExtension/EventBus/实体灼烧湿润毒烟状态接入 |
 | 2026-11-20 | [2026-11-20-07-m1-plan-final-and-m1-01-frozen.md](2026-11-20-07-m1-plan-final-and-m1-01-frozen.md) | 决策 + 更新 | 详细 | M1 计划 5 项全拍板生效（含完整 Wang Tile）；M1-01（C-EVT/C-TEXT v0.1）冻结并落地词表、CI 机检与运行时骨架 |

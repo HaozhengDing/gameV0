@@ -10,7 +10,14 @@ const SPRAY_ORIGIN_OFFSET_Y := 4 # 喷水起点上移至胸口，避免站地板
 const WATER_CAP := 200
 const OIL_CAP := 100
 const LANTERNS_MAX := 7
-const HAZARD_INTERVAL_TICKS := 30   # 每 0.5s（60 tick/s）掉 1 盏
+const HAZARD_INTERVAL_TICKS := 30   # 每 0.5s（60 tick/s）结算直接触火气血伤
+const DIRECT_FIRE_DAMAGE := 12.0    # 直接触火每 0.5s 扣 12 气血
+const BURN_DOT_INTERVAL := 30       # 离火后灼烧每 0.5s 扣 1.0 气血（2% max HP/s）
+const BURN_DOT_DAMAGE := 1.0
+const POISON_DOT_INTERVAL := 30     # 毒烟中毒每 0.5s 扣 1.5 气血（3 HP/s）
+const POISON_DOT_DAMAGE := 1.5
+const YIN_QI_INTERVAL := 60         # 阴气侵蚀每 1.0s 熄 0.3 盏魄灯（S-0004：0.2–0.5 盏）
+const YIN_QI_LANTERN_LOSS := 0.3
 const BODY_HALF_W := 2              # 与 player.gd 身体碰撞盒一致（x ±2, y -9..0）
 const BODY_HEIGHT := 10
 const IGNITE_RADIUS := 3            # ignite op 半径（调用 C-SIM v3 apply_heat_burst）
@@ -20,8 +27,6 @@ const HEAT_BURST_TEMP := 400.0      # 热冲击温度（触发黑火药/硫磺�
 const BURNING_DURATION_TICKS := 300 # 灼烧持续 5s（60Hz，见 data/magic_numbers.json fire_heat）
 const WET_DURATION_TICKS := 300     # 湿润持续 5s（免疫点燃且立刻灭灼烧）
 const POISON_DURATION_TICKS := 180  # 中毒持续 3s（接触毒烟触发）
-const BURN_DOT_INTERVAL := 90       # 离火后灼烧每 1.5s 掉 1 盏
-const POISON_DOT_INTERVAL := 120    # 毒烟中毒每 2.0s 掉 1 盏
 const MAX_ACTION_DEPTH := 4
 
 var sim: SimWorldNode
@@ -32,18 +37,19 @@ var hud
 var event_bus
 var text_db
 var combat
+var vitals
 
-# 葫芦 / 盏 / 实体状态 / 施法反馈
+# 葫芦 / 实体状态 / 施法反馈（气血与七星灯由 vitals 管理）
 var gourd_water := 0
 var gourd_oil := 0
 var current_liquid := "water"
-var lanterns := LANTERNS_MAX
 var damage_ticks := 0
 var burning_ticks := 0
 var wet_ticks := 0
 var poison_ticks := 0
 var _burn_dot_ticks := 0
 var _poison_dot_ticks := 0
+var _yin_ticks := 0
 var last_cast_status := "待命"
 
 # 组合统计（HUD/smoke 用）
@@ -54,9 +60,11 @@ var mat_empty := 0
 var mat_water := 3
 var mat_oil := 4
 var mat_fire := 6
+var mat_yin_qi := 15
 var mat_toxic_smoke := 17
 
-func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud, p_event_bus = null, p_text_db = null, p_combat = null) -> void:
+func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud,
+		p_event_bus = null, p_text_db = null, p_combat = null, p_vitals = null) -> void:
 	sim = p_sim
 	vm = p_vm
 	level = p_level
@@ -65,6 +73,7 @@ func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud, 
 	event_bus = p_event_bus
 	text_db = p_text_db
 	combat = p_combat
+	vitals = p_vitals
 	_cache_material_ids()
 
 func _cache_material_ids() -> void:
@@ -74,6 +83,7 @@ func _cache_material_ids() -> void:
 	mat_water = sim.material_id("water")
 	mat_oil = sim.material_id("oil")
 	mat_fire = sim.material_id("fire")
+	mat_yin_qi = sim.material_id("yin_qi")
 	mat_toxic_smoke = sim.material_id("toxic_smoke")
 	if mat_water < 0 or mat_oil < 0 or mat_fire < 0:
 		push_error("T4B executor: C-SIM 材质表缺少 water/oil/fire（需要 C-SIM v3）")
@@ -82,16 +92,18 @@ func reset_round() -> void:
 	gourd_water = 0
 	gourd_oil = 0
 	current_liquid = "water"
-	lanterns = LANTERNS_MAX
 	damage_ticks = 0
 	burning_ticks = 0
 	wet_ticks = 0
 	poison_ticks = 0
 	_burn_dot_ticks = 0
 	_poison_dot_ticks = 0
+	_yin_ticks = 0
 	last_cast_status = "待命"
 	combo_water_converted = 0
 	combo_fire_doused = 0
+	if vitals != null:
+		vitals.reset()
 
 # ------------------------------------------------------------------ 葫芦
 
@@ -264,7 +276,7 @@ func tick_hazards(player_cell: Vector2i) -> bool:
 	elif poison_ticks > 0:
 		poison_ticks -= 1
 
-	# 3) 接触明火 / 燃烧中的煤、硫、竹木
+	# 3) 接触明火 / 燃烧中的煤、硫、竹木（扣气血，不直接熄灯）
 	var near_fire := is_near_fire(player_cell)
 	if near_fire:
 		if wet_ticks <= 0:
@@ -277,7 +289,7 @@ func tick_hazards(player_cell: Vector2i) -> bool:
 		damage_ticks += 1
 		if damage_ticks >= HAZARD_INTERVAL_TICKS:
 			damage_ticks = 0
-			if _apply_lantern_loss("火伤", player_cell, tick):
+			if _apply_hp_loss(DIRECT_FIRE_DAMAGE, "火", "火伤", "$ui_death_fire", tick):
 				return true
 	else:
 		damage_ticks = 0
@@ -286,39 +298,85 @@ func tick_hazards(player_cell: Vector2i) -> bool:
 			_burn_dot_ticks += 1
 			if _burn_dot_ticks >= BURN_DOT_INTERVAL:
 				_burn_dot_ticks = 0
-				if _apply_lantern_loss("灼烧", player_cell, tick):
+				if _apply_hp_loss(BURN_DOT_DAMAGE, "火", "灼烧", "$ui_death_fire", tick):
 					return true
 		else:
 			_burn_dot_ticks = 0
 
-	# 4) 毒烟持续伤盏
+	# 4) 毒烟持续伤气血
 	if poison_ticks > 0:
 		_poison_dot_ticks += 1
 		if _poison_dot_ticks >= POISON_DOT_INTERVAL:
 			_poison_dot_ticks = 0
-			if _apply_lantern_loss("毒烟", player_cell, tick):
+			if _apply_hp_loss(POISON_DOT_DAMAGE, "毒", "毒烟", "$ui_death_poison", tick):
 				return true
 	else:
 		_poison_dot_ticks = 0
 
+	# 5) 接触阴气：阴性伤害直接熄魄灯（每 1s 熄 0.3 盏，跨整盏压低气血上限）
+	if is_in_yin_qi(player_cell):
+		_yin_ticks += 1
+		if _yin_ticks >= YIN_QI_INTERVAL:
+			_yin_ticks = 0
+			if _apply_yin_lantern_loss(YIN_QI_LANTERN_LOSS, "阴气", tick):
+				return true
+	else:
+		_yin_ticks = 0
+
 	return false
 
-func _apply_lantern_loss(source_label: String, pos: Vector2i, tick: int) -> bool:
-	lanterns -= 1
+func _apply_hp_loss(amount: float, damage_type: String, source_label: String, death_key: String, tick: int) -> bool:
+	if vitals == null:
+		return false
+	var res: Dictionary = vitals.take_hp_damage(amount, damage_type, source_label, tick, event_bus, death_key)
 	if player != null and player.has_method("trigger_hurt_flash"):
 		player.trigger_hurt_flash()
-	if event_bus != null:
-		event_bus.publish("lantern_extinguished", tick, {
-			"source_id": source_label, "target_id": "player", "pos": pos, "value": 1.0,
-		})
-	_log("%s -1（%d/%d）" % [source_label, lanterns, LANTERNS_MAX])
-	if lanterns <= 0:
-		lanterns = LANTERNS_MAX
-		burning_ticks = 0
-		poison_ticks = 0
-		_burn_dot_ticks = 0
-		_poison_dot_ticks = 0
+	if bool(res.get("dead", false)):
+		var cause: String = text_db.get_text(death_key) if (text_db != null and text_db.has_key(death_key)) else source_label
+		_log(cause)
+		_reset_on_death()
 		return true
+	return false
+
+func _apply_yin_lantern_loss(amount: float, source_label: String, tick: int) -> bool:
+	if vitals == null:
+		return false
+	var res: Dictionary = vitals.extinguish_lanterns(amount, source_label, tick, event_bus)
+	if player != null and player.has_method("trigger_hurt_flash"):
+		player.trigger_hurt_flash()
+	if int(res.get("full_lost", 0)) > 0:
+		_log("魄灯熄灭（%.1f/7）" % vitals.lanterns)
+	if bool(res.get("dead", false)):
+		_log("七灯尽熄")
+		_reset_on_death()
+		return true
+	return false
+
+func _reset_on_death() -> void:
+	if vitals != null:
+		vitals.reset()
+	burning_ticks = 0
+	wet_ticks = 0
+	poison_ticks = 0
+	_burn_dot_ticks = 0
+	_poison_dot_ticks = 0
+	_yin_ticks = 0
+
+func is_in_yin_qi(center: Vector2i) -> bool:
+	if mat_yin_qi < 0:
+		return false
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	for dy in range(-BODY_HEIGHT + 1, 1):
+		var y := center.y + dy
+		if y < 0 or y >= h:
+			continue
+		for dx in range(-BODY_HALF_W, BODY_HALF_W + 1):
+			var x := center.x + dx
+			if x < 0 or x >= w:
+				continue
+			if sim.get_cell(x, y) == mat_yin_qi:
+				return true
 	return false
 
 func is_near_fire(center: Vector2i) -> bool:
