@@ -104,7 +104,7 @@ func on_event(ev: Dictionary) -> void:
 	match etype:
 		"entity_damaged":
 			if tid == "player":
-				_player_hurt(val)
+				_player_hurt(val, String(ev.get("source_id", "")))
 			else:
 				_hit(pos, val, String(ev.get("damage_type", "")))
 		"entity_killed":
@@ -174,7 +174,14 @@ func _kill(pos: Vector2, dtype: String) -> void:
 	if sfx != null:
 		sfx.play("kill", randf_range(0.95, 1.05), -3.0)
 
-func _player_hurt(amount: float) -> void:
+func _player_hurt(amount: float, source_id: String = "") -> void:
+	# 火/灼烧/毒烟/蒸汽等环境持续伤（DoT）只给轻红晕与微震，不触发全局顿帧（防止在火/毒云中移动卡顿）
+	var is_dot := source_id in ["火伤", "灼烧", "burning", "毒烟", "toxic_smoke", "蒸汽", "steam"]
+	if is_dot:
+		if screen != null and screen.has_method("hurt"):
+			screen.hurt(0.16)
+		_shake(Vector2.DOWN, SHAKE_HURT * 0.22, 0.08)
+		return
 	if screen != null and screen.has_method("hurt"):
 		screen.hurt(clampf(0.25 + amount / 40.0, 0.25, 0.55))
 	_shake(Vector2.DOWN, SHAKE_HURT, 0.20)

@@ -151,6 +151,55 @@ func rasterize_to_sim(sim: SimWorldNode) -> int:
 	])
 	return ms
 
+## 开局全图预沉降：光栅化后一次性让悬空液体与粉末自然落底摊平，避免玩家走近才「现加载」把敌人活埋。
+func settle_world(sim: SimWorldNode, ticks: int = 120) -> int:
+	if sim == null or not sim.has_world() or ticks <= 0:
+		return 0
+	var t0 := Time.get_ticks_msec()
+	sim.set_active_rect(0, 0, WORLD_W, WORLD_H)
+	sim.wake_rect(0, 0, WORLD_W, WORLD_H)
+	sim.step_ticks(ticks)
+	# 清空预沉降期间产生的零星事件，避免开局首帧刷屏 HUD
+	for _i in range(4):
+		if sim.poll_events(1024).is_empty():
+			break
+	var ms := Time.get_ticks_msec() - t0
+	print("M1_WANG_SETTLED ticks=%d ms=%d" % [ticks, ms])
+	return ms
+
+## 预沉降后校准实体/石碑位置：自动脱出任何沉积粉末或岩壁并贴地站稳，杜绝被埋。
+func find_safe_stand_pos(sim: SimWorldNode, origin: Vector2i, half_w: int = 3, height: int = 12) -> Vector2i:
+	if sim == null or not sim.has_world():
+		return origin
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	for dx_off in [0, -10, 10, -20, 20, -32, 32]:
+		var cx := clampi(origin.x + dx_off, half_w + 2, w - half_w - 3)
+		var y := clampi(origin.y, height + 2, h - 4)
+		for _up in range(80):
+			if _box_clear(sim, cx, y, half_w, height):
+				break
+			y -= 2
+			if y <= height + 2:
+				break
+		if not _box_clear(sim, cx, y, half_w, height):
+			continue
+		for _dn in range(60):
+			if y + 1 >= h - 2 or sim.is_solid(cx, y + 1):
+				break
+			if not _box_clear(sim, cx, y + 1, half_w, height):
+				break
+			y += 1
+		return Vector2i(cx, y)
+	return origin
+
+func _box_clear(sim: SimWorldNode, cx: int, cy: int, half_w: int, height: int) -> bool:
+	for gy in range(cy - height + 1, cy + 1):
+		for gx in range(cx - half_w, cx + half_w + 1):
+			if sim.is_solid(gx, gy):
+				return false
+	return true
+
 ## 粗格 BFS 连通性校验 + Wang 边严格匹配校验。
 func verify_connectivity() -> Dictionary:
 	# 1) 检查所有相邻宏观块共享边是否严格对称

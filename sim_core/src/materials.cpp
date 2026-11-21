@@ -163,10 +163,10 @@ void MaterialTable::init_builtin() {
 
     // 运动与燃烧参数（sim 内部默认值，可被 data/materials.json 覆盖）。
     defs_[SIM_MAT_SAND].spread = 1;
-    defs_[SIM_MAT_WATER].spread = 3;
-    defs_[SIM_MAT_OIL].spread = 3;
-    defs_[SIM_MAT_QUICKSILVER].spread = 1; // 粘稠：横向找平慢
-    defs_[SIM_MAT_BLACK_DOG_BLOOD].spread = 3;
+    defs_[SIM_MAT_WATER].spread = 6;
+    defs_[SIM_MAT_OIL].spread = 4;
+    defs_[SIM_MAT_QUICKSILVER].spread = 4; // 重液：仍比水慢，但能自然摊平不结块
+    defs_[SIM_MAT_BLACK_DOG_BLOOD].spread = 6;
     defs_[SIM_MAT_FIRE].fire_life_min = 40;
     defs_[SIM_MAT_FIRE].fire_life_max = 110;
     defs_[SIM_MAT_SMOKE].fire_life_min = 90;

@@ -13,7 +13,7 @@ const VIEW_H := 270
 const SEED := 20261116
 const FIXED_DT := 1.0 / 60.0
 const LANTERNS_MAX := 7
-const ACTIVE_MARGIN := 64       # 活动区 = 视口外扩 64 cells（T4B.md §2）
+const ACTIVE_MARGIN := 128      # 活动区 = 视口外扩 128 cells（提前 2 个 chunk 预唤醒，避免走进才现演化）
 const HUD_INTERVAL := 0.05
 const HEADLESS_NAME := "headless"
 const SHOT_WAIT := 0.6          # --t4b-shot：先跑 ~0.6s 让 sim/纹理就绪再截图
@@ -484,6 +484,15 @@ func _start_round() -> void:
 		if not bool(conn.get("connected", false)):
 			push_error("M1-04: Wang Tile 连通性校验失败：%s" % str(conn))
 		wang_gen.rasterize_to_sim(sim)
+		# 全图预沉降（120 tick）：让所有房间悬空的液体与矿粉自然落底摊平并休眠，再放实体/石碑
+		wang_gen.settle_world(sim, 120)
+		var settled_steles: Array[Dictionary] = []
+		for raw_s in wang_gen.steles:
+			if raw_s is Dictionary:
+				var sd: Dictionary = (raw_s as Dictionary).duplicate()
+				sd["pos"] = wang_gen.find_safe_stand_pos(sim, sd["pos"], 3, 10)
+				settled_steles.append(sd)
+		wang_gen.steles = settled_steles
 		if stele_layer != null:
 			stele_layer.set_steles(wang_gen.steles)
 		if exit_marker != null:
@@ -497,7 +506,9 @@ func _start_round() -> void:
 		if stele_layer != null:
 			stele_layer.set_steles([])
 	player.setup(sim)
-	player.set_cell_pos(wang_gen.start_cell if (use_wang_mine and wang_gen != null) else LevelScript.START_CELL)
+	player.fire_blocks_movement = not use_wang_mine
+	var spawn_c: Vector2i = wang_gen.find_safe_stand_pos(sim, wang_gen.start_cell, 2, 10) if (use_wang_mine and wang_gen != null) else LevelScript.START_CELL
+	player.set_cell_pos(spawn_c)
 	player.reset_motion()
 	if wand_manager != null:
 		wand_manager.reset()
@@ -520,8 +531,10 @@ func _spawn_wang_targets() -> void:
 		if not (raw_a is Dictionary):
 			continue
 		var a: Dictionary = raw_a
-		var pos: Vector2i = a["pos"]
 		var boss_id := String(a.get("boss_id", ""))
+		var half_w_i := 5 if boss_id == "boss-drought-demon" else 3
+		var height_i := 14 if boss_id == "boss-drought-demon" else 10
+		var pos: Vector2i = wang_gen.find_safe_stand_pos(sim, a["pos"], half_w_i, height_i)
 		if boss_id == "boss-drought-demon":
 			combat.spawn_entity({
 				"id": "boss_drought_demon",
@@ -1382,6 +1395,26 @@ func _run_smoke() -> void:
 				fail = "M1-04 创建 1536x672 Wang 世界失败"
 			else:
 				var rast_ms: int = wg.rasterize_to_sim(sim)
+				var settle_ms: int = wg.settle_world(sim, 120)
+				# 校验全部刷怪点经预沉降+安全站位校准后无任何实心格掩埋
+				var buried := 0
+				for raw_a in wg.spawn_anchors:
+					if raw_a is Dictionary:
+						var sp: Vector2i = wg.find_safe_stand_pos(sim, raw_a["pos"], 3, 10)
+						for gy in range(sp.y - 9, sp.y + 1):
+							for gx in range(sp.x - 2, sp.x + 3):
+								if sim.is_solid(gx, gy):
+									buried += 1
+									break
+				# 校验 M1 实机模式火焰/毒烟不阻挡玩家移动
+				player.setup(sim)
+				player.fire_blocks_movement = false
+				var walk_c := wg.find_safe_stand_pos(sim, wg.start_cell, 2, 10)
+				sim.set_cell_by_name(walk_c.x, walk_c.y - 2, "fire")
+				sim.set_cell_by_name(walk_c.x + 1, walk_c.y - 2, "toxic_smoke")
+				var blocked_by_gas: bool = player.blocked_at(Vector2(float(walk_c.x * SCALE) + 2.0, float(walk_c.y * SCALE) + 2.0))
+				sim.set_cell(walk_c.x, walk_c.y - 2, 0)
+				sim.set_cell(walk_c.x + 1, walk_c.y - 2, 0)
 				event_bus.reset()
 				stele_layer.setup(text_db, event_bus)
 				stele_layer.set_steles(wg.steles)
@@ -1398,7 +1431,11 @@ func _run_smoke() -> void:
 				var hp_before_col: float = vitals.hp
 				biome_hazards.on_event({"type": "terrain_dug", "tick": 20, "pos": qs_pos, "value": 650.0}, qs_pos)
 				var hp_after_col: float = vitals.hp
-				if txt_sane.is_empty() or txt_sane == txt_corrupt or event_bus.count_of("rule_triggered") < 1:
+				if buried > 0:
+					fail = "M1-04 预沉降后仍有 %d 个刷怪格被掩埋" % buried
+				elif blocked_by_gas:
+					fail = "M1-04 火焰/毒烟错误阻挡了玩家移动"
+				elif txt_sane.is_empty() or txt_sane == txt_corrupt or event_bus.count_of("rule_triggered") < 1:
 					fail = "M1-04 碑文读写/D3腐坏异常（sane=%s corrupt=%s）" % [txt_sane, txt_corrupt]
 				elif not qs_blocked:
 					fail = "M1-04 水银池压制回灵未触发"
@@ -1407,8 +1444,8 @@ func _run_smoke() -> void:
 				elif event_bus.count_of("hazard_triggered") < 2:
 					fail = "M1-04 C-EVT hazard_triggered 计数不足（%d）" % event_bus.count_of("hazard_triggered")
 				else:
-					print("T4B_SMOKE_STEP M1-04Wang矿井 seeds=%d/5 connected=100%% macros=12/12 rast_ms=%d steles=%d hazards=ok" % [
-						seeds_ok, rast_ms, wg.steles.size()
+					print("T4B_SMOKE_STEP M1-04Wang矿井 seeds=%d/5 connected=100%% macros=12/12 rast_ms=%d settle_ms=%d buried=0 gas_pass=ok" % [
+						seeds_ok, rast_ms, settle_ms
 					])
 
 	# M1-10 反馈层：走真实路径（施法火光/后坐 → 命中/击杀 → 分层音效 → 顿帧复位）
@@ -1434,8 +1471,21 @@ func _run_smoke() -> void:
 			fx_layer.update_fx(0.016)
 			screen_fx.tick(0.016)
 			feedback.reset()
+			# 校验 DoT（毒烟/火伤/灼烧）不触发全局顿帧
+			feedback.on_event({
+				"type": "entity_damaged", "source_id": "毒烟", "target_id": "player",
+				"pos": pc, "value": 1.5, "damage_type": "毒",
+			})
+			feedback.on_event({
+				"type": "entity_damaged", "source_id": "火伤", "target_id": "player",
+				"pos": pc, "value": 4.0, "damage_type": "火",
+			})
+			var dot_no_hitstop: bool = absf(Engine.time_scale - 1.0) < 0.001
+			feedback.reset()
 			if not slow_after_hit:
 				fb_fail = "M1-10 命中顿帧未生效（time_scale=%.2f）" % Engine.time_scale
+			elif not dot_no_hitstop:
+				fb_fail = "M1-10 毒烟/灼烧 DoT 错误触发了顿帧"
 			elif absf(Engine.time_scale - 1.0) > 0.001:
 				fb_fail = "M1-10 顿帧未复位（time_scale=%.2f）" % Engine.time_scale
 		if fb_fail != "":

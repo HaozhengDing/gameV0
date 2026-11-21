@@ -556,7 +556,7 @@ struct sim_world {
             move_to(x, y, x, y + 1);
             return;
         }
-        const int32_t dir = (cell_random(x, y, kSaltDir) & 1) ? 1 : -1;
+        const int32_t dir = (tick_random(x, y, kSaltDir) & 1ULL) ? 1 : -1;
         if (can_displace(x + dir, y + 1, mat, SIM_STATE_LIQUID)) {
             move_to(x, y, x + dir, y + 1);
             return;
@@ -565,16 +565,28 @@ struct sim_world {
             move_to(x, y, x - dir, y + 1);
             return;
         }
-        // 横向找平：沿 dir 方向走过连续空格，最多 spread 步（水/油 3，水银 1）。
+        // 横向找平：先沿 dir 探索，受阻则立刻尝试反方向 -dir，避免单侧遇墙时僵直成固体。
         const int32_t spread = static_cast<int32_t>(mat_spread[mat]);
-        int32_t reach = 0;
-        for (int32_t s = 1; s <= spread; ++s) {
-            const int32_t nx = x + dir * s;
-            if (!empty_at(nx, y)) break;
-            reach = s;
-            if (can_displace(nx, y + 1, mat, SIM_STATE_LIQUID)) break; // 到边缘，先滑到这里
+        auto try_horiz = [&](int32_t step_dir) -> int32_t {
+            int32_t reach = 0;
+            for (int32_t s = 1; s <= spread; ++s) {
+                const int32_t nx = x + step_dir * s;
+                if (!can_displace(nx, y, mat, SIM_STATE_LIQUID)) break;
+                reach = s;
+                if (!empty_at(nx, y)) break; // 置换轻液/气体只跨一步
+                if (can_displace(nx, y + 1, mat, SIM_STATE_LIQUID)) break; // 到边缘立即下滑
+            }
+            return reach;
+        };
+        int32_t reach = try_horiz(dir);
+        if (reach > 0) {
+            move_to(x, y, x + dir * reach, y);
+            return;
         }
-        if (reach > 0) move_to(x, y, x + dir * reach, y);
+        reach = try_horiz(-dir);
+        if (reach > 0) {
+            move_to(x, y, x - dir * reach, y);
+        }
     }
 
     inline bool neighbor_has_water(int32_t x, int32_t y) const {
@@ -778,6 +790,8 @@ struct sim_world {
         }
         const uint8_t t8 = static_cast<uint8_t>(tick);
         const bool left_to_right = (tick & 1ULL) == 0;
+        // 自底向上排序活跃 chunk，避免跨 64 格边界下落时产生水平条纹缝隙。
+        std::sort(awake_cur.begin(), awake_cur.end(), std::greater<uint32_t>());
 
         for (const uint32_t ci : awake_cur) {
             Chunk& ch = chunks[ci];

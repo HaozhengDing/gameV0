@@ -27,7 +27,6 @@ const MAX_SUBSTEP_PX := 2.0         # 0.5 cell/步，防止穿墙或贴墙留缝
 
 const BODY_HALF_W := 2              # cells：[cx-2, cx+2] = 5 cells
 const BODY_HEIGHT := 10             # cells：脚在 cell_pos，头顶 = cell_pos.y - 9
-const FIRE_BLOCKS_MOVEMENT := true
 const WORLD_W := 960
 const WORLD_H := 540
 
@@ -45,6 +44,7 @@ var in_liquid := false
 var is_thrusting := false
 var input_enabled := true
 var physics_enabled := true
+var fire_blocks_movement := false   # M1 实机火焰/毒气不阻挡移动（仅经典 T4b 火墙模式开启）
 
 var fire_mat := -1
 var quicksilver_mat := -1
@@ -121,7 +121,7 @@ func _blocked_count(px_pos: Vector2) -> int:
 			if sim.is_solid(gx, gy):
 				count += 1
 				continue
-			if FIRE_BLOCKS_MOVEMENT and fire_mat >= 0 and sim.get_cell(gx, gy) == fire_mat:
+			if fire_blocks_movement and fire_mat >= 0 and sim.get_cell(gx, gy) == fire_mat:
 				count += 1
 	return count
 
@@ -138,7 +138,7 @@ func _hard_blocked_at(px_pos: Vector2) -> bool:
 			var m: int = sim.get_cell(gx, gy)
 			if m > 0 and sim.get_material_state(m) == 4:
 				return true
-			if FIRE_BLOCKS_MOVEMENT and fire_mat >= 0 and m == fire_mat:
+			if fire_blocks_movement and fire_mat >= 0 and m == fire_mat:
 				return true
 	return false
 

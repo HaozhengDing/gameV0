@@ -544,6 +544,32 @@ bool test_reactions_and_heat(const std::string& materials) {
         CHECK(count_material(w, 64, 64, SIM_MAT_STEAM) > 0);
         sim_world_destroy(w);
     }
+
+    // 6g) 液体双向找平回归：水银与水柱落地后必须自然摊平，不得因固定随机方向僵直成固体堆
+    for (uint16_t liq : {static_cast<uint16_t>(SIM_MAT_WATER),
+                         static_cast<uint16_t>(SIM_MAT_QUICKSILVER)}) {
+        sim_world* w = make_world(64, 64, 107ULL + liq, mp);
+        CHECK(w != nullptr);
+        for (int32_t x = 2; x <= 61; ++x) sim_world_set_cell(w, x, 56, SIM_MAT_ROCK);
+        for (int32_t y = 40; y <= 56; ++y) {
+            sim_world_set_cell(w, 2, y, SIM_MAT_ROCK);
+            sim_world_set_cell(w, 61, y, SIM_MAT_ROCK);
+        }
+        for (int32_t y = 46; y < 56; ++y) {
+            for (int32_t x = 27; x < 37; ++x) sim_world_set_cell(w, x, y, liq);
+        }
+        for (int t = 0; t < 120; ++t) sim_world_step(w);
+        CHECK(count_material(w, 64, 64, liq) == 100);
+        int32_t min_y = 64;
+        for (int32_t y = 0; y < 64; ++y) {
+            for (int32_t x = 0; x < 64; ++x) {
+                if (sim_world_get_cell(w, x, y).material == liq && y < min_y) min_y = y;
+            }
+        }
+        // 100 格铺满 58 格宽槽理论高度约 2 格；要求最高液面高度 <= 4 格（y >= 52）
+        CHECK(min_y >= 52);
+        sim_world_destroy(w);
+    }
     return true;
 }
 
