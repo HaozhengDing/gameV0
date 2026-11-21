@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-21 | [2026-11-21-20-m1-progress-and-ai-demos.md](2026-11-21-20-m1-progress-and-ai-demos.md) | 评审 + 建议 | 详细 | 对照单提示 AI 游戏演示与现有 M1-α，建议先用旱魃房验证环境解法与一段完整观感 |
 | 2026-11-21 | [2026-11-21-19-multi-character-archetypes-assessment.md](2026-11-21-19-multi-character-archetypes-assessment.md) | 建议 + 评审 | 摘要 | 评估多角色选择系统设想（方士/纯近战/纯触手邪神子嗣）：架构天然可插拔、零改 sim_core，建议排入 M3/M4 并在近战/触手中紧扣 D1 元素沙盒 |
 | 2026-11-21 | [2026-11-21-18-hit-feel-overlap-audit.md](2026-11-21-18-hit-feel-overlap-audit.md) | 评审 | 摘要 | 打击感同题材视频去重：6 层重叠 6/6、不新开卡；唯一新增检查点是敌人受击的击退/后仰（本作只做了白闪） |
 | 2026-11-21 | [2026-11-21-17-vfx-implementation.md](2026-11-21-17-vfx-implementation.md) | 调研 + 建议 | 详细 | 特效实现方式：视频（转写两次失败）反查到开源 pixelfx（8587★/MIT/JS），拆成 3 候选卡；结论"程序化为主、pixelfx 只当草稿生成器、序列帧留给过场" |
