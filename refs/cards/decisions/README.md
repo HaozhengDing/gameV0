@@ -6,6 +6,9 @@
 |---|---|
 | 2D 战斗打击感与命中辨认 | [combat-hit-feedback.md](combat-hit-feedback.md) |
 | 视觉与动效生产路线（矿井环境表现层） | [visual-production.md](visual-production.md) |
+| 下落固体（粉末）穿行与分级减速 | [powder-traversal.md](powder-traversal.md) |
+| 2D 动作沙盒 BOSS AI 与机动性（旱魃） | [boss-ai-mobility.md](boss-ai-mobility.md) |
+| 人物机动性与浮空条收敛（含下落低速回充） | [player-levitation-tuning.md](player-levitation-tuning.md) |
 
 ## 主题记录
 
