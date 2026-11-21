@@ -67,3 +67,7 @@ raw → analyzed（填完 A–H）→ mapped（I 能对应到系统）→ protot
 ## 9. 版权与红线
 只借机制 / 结构 / 母题；不直接使用角色名、专有设定、标志性桥段；改编需授权。
 迷信/邪教/血腥题材注意平台与版号风险；做「民俗恐怖表达」，不做「封建迷信宣传」。
+
+## 游戏开发决策参考
+
+战斗、关卡、教学等开发抉择的方案与证据见 [游戏开发决策参考卡](cards/decisions/README.md)。DeepSeek Harness 中可用 `/game-decision-research <问题>` 更新相关卡片。
