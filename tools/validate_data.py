@@ -307,6 +307,9 @@ def validate_biomes(room_map, material_by_id, material_ids, reaction_ids):
                 if rid not in rule_ids:
                     err(f"{rel}: 房间 {ref} 的 rule {rid} 未在 biome 中定义")
         boss = (data.get("spawn_table") or {}).get("boss") or {}
+        arena = boss.get("arena")
+        if arena and arena not in room_map:
+            err(f"{rel}: boss arena 引用了不存在的房间 {arena}")
         for m in boss.get("weak_to", []) or []:
             if m not in material_ids:
                 err(f"{rel}: boss weak_to 引用未定义物质 {m}")

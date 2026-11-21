@@ -30,6 +30,9 @@ const CombatManagerScript := preload("res://scripts/combat/combat_manager.gd")
 const VitalsScript := preload("res://scripts/vitals.gd")
 const WandManagerScript := preload("res://scripts/wand_manager.gd")
 const WandUIScript := preload("res://scripts/wand_ui.gd")
+const WangGenScript := preload("res://scripts/wang_gen.gd")
+const SteleScript := preload("res://scripts/stele.gd")
+const BiomeHazardsScript := preload("res://scripts/biome_hazards.gd")
 
 const REACTION_TEXT_KEYS := {
 	"r-black-powder": "$react_black_powder",
@@ -58,6 +61,9 @@ var combat
 var vitals
 var wand_manager
 var wand_ui
+var wang_gen
+var stele_layer
+var biome_hazards
 var exit_marker: ColorRect
 
 # 玩法状态
@@ -68,6 +74,11 @@ var selected_group := 0
 var completed := false
 var smoke_mode := false
 var shot_mode := false
+var use_wang_mine := true
+var world_w := WORLD_W
+var world_h := WORLD_H
+var _run_seed := 20261121
+var current_sanity := 100
 var _world_ready := false
 var _shot_timer := 0.0
 var _shot_done := false
@@ -83,6 +94,13 @@ func _ready() -> void:
 	var user_args := OS.get_cmdline_user_args()
 	smoke_mode = user_args.has("--t4b-smoke")
 	shot_mode = user_args.has("--t4b-shot")
+	use_wang_mine = not smoke_mode and not user_args.has("--classic-t4b")
+	if use_wang_mine:
+		world_w = WangGenScript.WORLD_W
+		world_h = WangGenScript.WORLD_H
+	else:
+		world_w = WORLD_W
+		world_h = WORLD_H
 	if smoke_mode:
 		set_physics_process(false)
 		set_process(false)
@@ -120,9 +138,11 @@ func _setup() -> void:
 	_refresh_hud()
 	_apply_view()
 	_world_ready = true
-	print("T4B_WORLD_READY world=%dx%d scale=%d materials=%s start=%s exit=%s groups=%d" % [
-		WORLD_W, WORLD_H, SCALE, sim.get_materials_source(),
-		str(LevelScript.START_CELL), str(LevelScript.EXIT_CELL), group_ids.size()
+	var start_c: Vector2i = wang_gen.start_cell if (use_wang_mine and wang_gen != null) else LevelScript.START_CELL
+	var exit_c: Vector2i = wang_gen.exit_cell if (use_wang_mine and wang_gen != null) else LevelScript.EXIT_CELL
+	print("T4B_WORLD_READY world=%dx%d scale=%d materials=%s start=%s exit=%s groups=%d mode=%s" % [
+		world_w, world_h, SCALE, sim.get_materials_source(),
+		str(start_c), str(exit_c), group_ids.size(), "wang_mine" if use_wang_mine else "classic_t4b"
 	])
 
 func _quit(code: int) -> void:
@@ -149,14 +169,19 @@ func _tick_once() -> void:
 	if combat != null:
 		combat.step_tick()
 	vm.tick_advance()
+	var pc: Vector2i = player.cell_pos()
+	var qs_blocked: bool = biome_hazards.check_quicksilver_block(pc, sim.get_tick()) if biome_hazards != null else _is_player_in_quicksilver()
 	if wand_manager != null:
 		wand_manager.in_safe_zone = _is_player_in_safe_zone()
-		wand_manager.tick_advance(_is_player_in_quicksilver())
-	level.tick_fire_wall()
+		wand_manager.tick_advance(qs_blocked)
+	if stele_layer != null:
+		stele_layer.update_proximity(pc, current_sanity, sim.get_tick())
+	if not use_wang_mine:
+		level.tick_fire_wall()
 	if completed:
 		return
-	if executor.tick_hazards(player.cell_pos()):
-		player.set_cell_pos(LevelScript.START_CELL)
+	if executor.tick_hazards(pc):
+		player.set_cell_pos(wang_gen.start_cell if (use_wang_mine and wang_gen != null) else LevelScript.START_CELL)
 		player.reset_motion()
 		hud.log_event("回到起点")
 		_refresh_hud()
@@ -165,6 +190,8 @@ func _tick_once() -> void:
 func _is_player_in_safe_zone() -> bool:
 	if player == null:
 		return false
+	if use_wang_mine and wang_gen != null:
+		return wang_gen.is_in_safe_zone(player.cell_pos())
 	return player.cell_pos().x < LevelScript.START_CORRIDOR_W
 
 func _is_player_in_quicksilver() -> bool:
@@ -252,14 +279,14 @@ func _apply_view() -> void:
 	if sim == null or not sim.has_world() or player == null:
 		return
 	var pc: Vector2i = player.cell_pos()
-	var vx := clampi(pc.x - VIEW_W / 2, 0, maxi(WORLD_W - VIEW_W, 0))
-	var vy := clampi(pc.y - VIEW_H / 2, 0, maxi(WORLD_H - VIEW_H, 0))
+	var vx := clampi(pc.x - VIEW_W / 2, 0, maxi(world_w - VIEW_W, 0))
+	var vy := clampi(pc.y - VIEW_H / 2, 0, maxi(world_h - VIEW_H, 0))
 	if vx != _last_view.x or vy != _last_view.y:
 		_last_view = Vector2i(vx, vy)
 		var ax := maxi(vx - ACTIVE_MARGIN, 0)
 		var ay := maxi(vy - ACTIVE_MARGIN, 0)
-		var ax1 := mini(vx + VIEW_W + ACTIVE_MARGIN, WORLD_W)
-		var ay1 := mini(vy + VIEW_H + ACTIVE_MARGIN, WORLD_H)
+		var ax1 := mini(vx + VIEW_W + ACTIVE_MARGIN, world_w)
+		var ay1 := mini(vy + VIEW_H + ACTIVE_MARGIN, world_h)
 		_active_rect = Rect2i(ax, ay, ax1 - ax, ay1 - ay)
 		sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
 	if DisplayServer.get_name() == HEADLESS_NAME:
@@ -279,7 +306,7 @@ func _create_sim() -> void:
 	sim.set_scale(Vector2(SCALE, SCALE))
 	sim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(sim)
-	if not sim.create_world(WORLD_W, WORLD_H, SEED, _materials_path()):
+	if not sim.create_world(world_w, world_h, _run_seed if use_wang_mine else SEED, _materials_path()):
 		push_error("T4B: SimWorldNode.create_world 失败")
 		sim = null
 
@@ -292,6 +319,11 @@ func _cards_path() -> String:
 func _create_level() -> void:
 	level = LevelScript.new()
 	level.setup(sim)
+	wang_gen = WangGenScript.new()
+	stele_layer = SteleScript.new()
+	stele_layer.name = "SteleLayer"
+	add_child(stele_layer)
+	biome_hazards = BiomeHazardsScript.new()
 	# 出口区视觉标记（跨越走廊整高，配「出口」文字标识）；HUD 另有距离提示
 	exit_marker = ColorRect.new()
 	exit_marker.name = "ExitMarker"
@@ -338,8 +370,8 @@ func _create_player() -> void:
 	camera.name = "Camera"
 	camera.limit_left = 0
 	camera.limit_top = 0
-	camera.limit_right = WORLD_W * SCALE
-	camera.limit_bottom = WORLD_H * SCALE
+	camera.limit_right = world_w * SCALE
+	camera.limit_bottom = world_h * SCALE
 	camera.position_smoothing_enabled = false
 	player.add_child(camera)
 
@@ -410,10 +442,29 @@ func _start_round() -> void:
 	if event_bus != null:
 		event_bus.reset()
 		event_bus.subscribe(_on_combat_event)
-	if not level.build():
-		push_error("T4B: level.build 失败")
+	if stele_layer != null:
+		stele_layer.setup(text_db, event_bus)
+	if biome_hazards != null:
+		biome_hazards.setup(sim, event_bus, vitals, text_db, hud)
+	if use_wang_mine and wang_gen != null:
+		var conn: Dictionary = wang_gen.generate_layout(_run_seed)
+		if not bool(conn.get("connected", false)):
+			push_error("M1-04: Wang Tile 连通性校验失败：%s" % str(conn))
+		wang_gen.rasterize_to_sim(sim)
+		if stele_layer != null:
+			stele_layer.set_steles(wang_gen.steles)
+		if exit_marker != null:
+			exit_marker.position = Vector2(
+				float((wang_gen.exit_cell.x - 8) * SCALE),
+				float((wang_gen.exit_cell.y - 16) * SCALE)
+			)
+	else:
+		if not level.build():
+			push_error("T4B: level.build 失败")
+		if stele_layer != null:
+			stele_layer.set_steles([])
 	player.setup(sim)
-	player.set_cell_pos(LevelScript.START_CELL)
+	player.set_cell_pos(wang_gen.start_cell if (use_wang_mine and wang_gen != null) else LevelScript.START_CELL)
 	player.reset_motion()
 	if wand_manager != null:
 		wand_manager.reset()
@@ -422,10 +473,48 @@ func _start_round() -> void:
 		wand_ui.set_open(false)
 	if combat != null:
 		combat.reset_round()
-		_spawn_demo_targets()
+		if use_wang_mine and wang_gen != null:
+			_spawn_wang_targets()
+		else:
+			_spawn_demo_targets()
 	executor.reset_round()
 	vm.reset()
 	_last_view = Vector2i(-999999, -999999)
+
+func _spawn_wang_targets() -> void:
+	var idx := 0
+	for raw_a in wang_gen.spawn_anchors:
+		if not (raw_a is Dictionary):
+			continue
+		var a: Dictionary = raw_a
+		var pos: Vector2i = a["pos"]
+		var boss_id := String(a.get("boss_id", ""))
+		if boss_id == "boss-drought-demon":
+			combat.spawn_entity({
+				"id": "boss_drought_demon",
+				"name": text_db.get_text("$enemy_drought_demon") if text_db != null else "旱魃",
+				"faction": "enemy",
+				"pos": Vector2(float(pos.x), float(pos.y)),
+				"half_w": 5.0,
+				"height": 14.0,
+				"max_hp": 420.0,
+				"tags": ["spirit", "boss"],
+				"weak_to": {"水": 2.0, "阴": 1.8, "火": 0.25},
+				"color": Color(0.88, 0.28, 0.16),
+			})
+		else:
+			var is_spirit := (idx % 2 == 0)
+			combat.spawn_entity({
+				"id": "wang_mob_%d" % idx,
+				"name": (text_db.get_text("$enemy_coal_ghost") if is_spirit else text_db.get_text("$enemy_earth_worm")) if text_db != null else "矿鬼",
+				"faction": "enemy",
+				"pos": Vector2(float(pos.x), float(pos.y)),
+				"max_hp": 30.0 if is_spirit else 35.0,
+				"tags": ["spirit"] if is_spirit else ["eldritch"],
+				"weak_to": {"阳": 2.0, "火": 1.2} if is_spirit else {"金": 1.5, "雷": 1.5},
+				"color": Color(0.54, 0.72, 0.88) if is_spirit else Color(0.72, 0.36, 0.70),
+			})
+		idx += 1
 
 func _spawn_demo_targets() -> void:
 	# M1-02 靶标实体（实机可试射；正式敌人 AI 在 M1-06 接入）
@@ -451,6 +540,8 @@ func _spawn_demo_targets() -> void:
 	})
 
 func _on_combat_event(ev: Dictionary) -> void:
+	if biome_hazards != null and player != null and not smoke_mode:
+		biome_hazards.on_event(ev, player.cell_pos())
 	if hud == null or smoke_mode:
 		return
 	var etype: String = String(ev.get("type", ""))
@@ -534,8 +625,8 @@ func _aim_cell() -> Vector2i:
 		return player.cell_pos() + Vector2i(roundi(player.facing.x), roundi(player.facing.y)) * 8
 	var mp := get_global_mouse_position()
 	return Vector2i(
-		clampi(floori(mp.x / float(SCALE)), 0, WORLD_W - 1),
-		clampi(floori(mp.y / float(SCALE)), 0, WORLD_H - 1)
+		clampi(floori(mp.x / float(SCALE)), 0, world_w - 1),
+		clampi(floori(mp.y / float(SCALE)), 0, world_h - 1)
 	)
 
 func _do_cast(aim: Vector2i) -> void:
@@ -561,7 +652,9 @@ func _select_wand(index: int) -> void:
 func _restart() -> void:
 	if not _world_ready:
 		return
-	if not sim.create_world(WORLD_W, WORLD_H, SEED, _materials_path()):
+	if use_wang_mine:
+		_run_seed += 1
+	if not sim.create_world(world_w, world_h, _run_seed if use_wang_mine else SEED, _materials_path()):
 		push_error("T4B: 重开时 create_world 失败")
 		return
 	_start_round()
@@ -569,21 +662,26 @@ func _restart() -> void:
 		overlay.clear_pulses()
 	hud.clear_complete()
 	hud.clear_log()
-	hud.log_event("重开本轮")
+	hud.log_event("重开本轮（seed %d）" % _run_seed if use_wang_mine else "重开本轮")
 	_refresh_hud()
 	_apply_view()
 
 # ================================================================== --t4b-shot 截图
 
-## 窗口模式目检用：把玩家放到房间 01 中部（朝东，画面能同时看到水银池 / 东门走廊 / 火障），
-## 先跑 SHOT_WAIT 秒让 sim 跑几帧、纹理上传完成，再截当前 viewport 到 ../t4b_shot.png 后退出 0。
+## 窗口模式目检用：Wang 模式下站在洞天入口安全区碑文旁；经典模式下站在房间 01 中部。
 func _setup_shot() -> void:
-	player.set_cell_pos(LevelScript.SHOT_PLAYER_CELL)
+	var shot_pos: Vector2i = wang_gen.start_cell if (use_wang_mine and wang_gen != null) else LevelScript.SHOT_PLAYER_CELL
+	if use_wang_mine and wang_gen != null and not wang_gen.steles.is_empty():
+		var st_pos: Vector2i = wang_gen.steles[0]["pos"]
+		shot_pos = Vector2i(st_pos.x - 16, st_pos.y)
+	player.set_cell_pos(shot_pos)
 	player.facing = Vector2.RIGHT
+	if stele_layer != null:
+		stele_layer.update_proximity(shot_pos, current_sanity, 0)
 	_apply_view()
 	_shot_timer = 0.0
 	_shot_done = false
-	print("T4B_SHOT_ARMED player_cell=%s wait=%.2fs" % [str(LevelScript.SHOT_PLAYER_CELL), SHOT_WAIT])
+	print("T4B_SHOT_ARMED player_cell=%s wait=%.2fs" % [str(shot_pos), SHOT_WAIT])
 
 func _take_shot() -> void:
 	await RenderingServer.frame_post_draw
@@ -608,7 +706,8 @@ func _take_shot() -> void:
 func _check_exit_now() -> bool:
 	if completed:
 		return true
-	if level.is_at_exit(player.cell_pos()):
+	var at_exit: bool = wang_gen.is_at_exit(player.cell_pos()) if (use_wang_mine and wang_gen != null) else level.is_at_exit(player.cell_pos())
+	if at_exit:
 		completed = true
 		hud.show_complete("本轮完成\n按 R 重开")
 		hud.log_event("到达出口，本轮完成")
@@ -618,8 +717,10 @@ func _check_exit_now() -> bool:
 func _refresh_hud() -> void:
 	if hud == null or vm == null or executor == null or player == null:
 		return
-	var dist_x := maxi(LevelScript.EXIT_CELL.x - player.cell_pos().x, 0)
-	var hint: String = "本轮完成 · R 重开" if completed else "出口 → %d" % dist_x
+	var target_exit: Vector2i = wang_gen.exit_cell if (use_wang_mine and wang_gen != null) else LevelScript.EXIT_CELL
+	var dist_x := roundi(Vector2(player.cell_pos()).distance_to(Vector2(target_exit))) if use_wang_mine else maxi(target_exit.x - player.cell_pos().x, 0)
+	var safe_tag := "安全区 · " if (wand_manager != null and wand_manager.in_safe_zone) else ""
+	var hint: String = "本轮完成 · R 重开" if completed else "%s出口 %d" % [safe_tag, dist_x]
 	var status_items: Array = []
 	for st_id in executor.get_active_statuses():
 		var st_key := "$status_" + String(st_id)
@@ -665,7 +766,9 @@ func _refresh_hud() -> void:
 func _cursor_material_text() -> String:
 	if sim == null or not sim.has_world():
 		return "—"
-	var c: Vector2i = LevelScript.MERCURY_AIM_CELL if shot_mode else _aim_cell()
+	var c: Vector2i = _aim_cell()
+	if shot_mode:
+		c = Vector2i(80, 196) if use_wang_mine else LevelScript.MERCURY_AIM_CELL
 	var m: int = sim.get_cell(c.x, c.y)
 	if m <= 0:
 		return "空"
@@ -1186,6 +1289,61 @@ func _run_smoke() -> void:
 							fail = "M1-03 安全区改符锁异常（blocked=%s ok=%s slot0=%s）" % [str(edit_blocked), str(edit_ok), slot0_after]
 						else:
 							print("T4B_SMOKE_STEP M1-03三法器与游标 wands=3 cursor=0->2->0 trigger_depth=%d safe_edit=ok" % int(w2.get("max_depth", 0)))
+
+	# 13) M1-04 矿井一层完整 Wang Tile + 手工房间拼接 + 连通性多 seed 校验 + 碑文与三大 Hazard 回归
+	if fail == "":
+		var wg = WangGenScript.new()
+		var seeds_ok := 0
+		var last_conn: Dictionary = {}
+		for s in [20261121, 20261122, 20261123, 20261124, 20261125]:
+			var conn: Dictionary = wg.generate_layout(s)
+			last_conn = conn
+			if not bool(conn.get("connected", false)) or int(conn.get("edge_mismatches", -1)) != 0:
+				fail = "M1-04 Wang Tile seed=%d 连通性/边匹配失败：%s" % [s, str(conn)]
+				break
+			var rooms_hit: Array = conn.get("reachable_rooms", [])
+			for req_room in ["hub_entry", "room-01-silver-pit", "room-02-gas-pocket", "room-boss-coalmine"]:
+				if not rooms_hit.has(req_room):
+					fail = "M1-04 seed=%d 缺少拼接房 %s" % [s, req_room]
+					break
+			if fail != "":
+				break
+			seeds_ok += 1
+		if fail == "":
+			# 把最后一个 seed 光栅化进真实 1536x672 SimWorld，验证碑文(D3 腐坏) + 水银滞灵 + 挖掘塌方
+			var sim_ok: bool = sim.create_world(WangGenScript.WORLD_W, WangGenScript.WORLD_H, 20261125, _materials_path())
+			if not sim_ok:
+				fail = "M1-04 创建 1536x672 Wang 世界失败"
+			else:
+				var rast_ms: int = wg.rasterize_to_sim(sim)
+				event_bus.reset()
+				stele_layer.setup(text_db, event_bus)
+				stele_layer.set_steles(wg.steles)
+				var st0: Vector2i = wg.steles[0]["pos"]
+				var txt_sane: String = stele_layer.update_proximity(st0, 100, 1)
+				var txt_corrupt: String = stele_layer.update_proximity(st0, 50, 2)
+				# 水银滞灵 hazard
+				biome_hazards.setup(sim, event_bus, vitals, text_db, hud)
+				var qs_pos := Vector2i(80, 160)
+				sim.set_cell_by_name(qs_pos.x, qs_pos.y - 2, "quicksilver")
+				var qs_blocked: bool = biome_hazards.check_quicksilver_block(qs_pos, 10)
+				# 挖掘过快塌方 hazard（180 tick 内掘 >= 600 格 -> 落石 + 15 HP 伤害）
+				vitals.reset()
+				var hp_before_col: float = vitals.hp
+				biome_hazards.on_event({"type": "terrain_dug", "tick": 20, "pos": qs_pos, "value": 650.0}, qs_pos)
+				var hp_after_col: float = vitals.hp
+				if txt_sane.is_empty() or txt_sane == txt_corrupt or event_bus.count_of("rule_triggered") < 1:
+					fail = "M1-04 碑文读写/D3腐坏异常（sane=%s corrupt=%s）" % [txt_sane, txt_corrupt]
+				elif not qs_blocked:
+					fail = "M1-04 水银池压制回灵未触发"
+				elif biome_hazards.collapse_count < 1 or absf((hp_before_col - hp_after_col) - 15.0) > 0.01:
+					fail = "M1-04 矿顶塌方 hazard 异常（cnt=%d hp=%.1f->%.1f）" % [biome_hazards.collapse_count, hp_before_col, hp_after_col]
+				elif event_bus.count_of("hazard_triggered") < 2:
+					fail = "M1-04 C-EVT hazard_triggered 计数不足（%d）" % event_bus.count_of("hazard_triggered")
+				else:
+					print("T4B_SMOKE_STEP M1-04Wang矿井 seeds=%d/5 connected=100%% macros=12/12 rast_ms=%d steles=%d hazards=ok" % [
+						seeds_ok, rast_ms, wg.steles.size()
+					])
 
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)

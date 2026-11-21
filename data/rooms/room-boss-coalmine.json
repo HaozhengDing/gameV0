@@ -1,0 +1,80 @@
+{
+  "schema": "gamev0.room/v0.1",
+  "version": "0.1",
+  "id": "room-boss-coalmine",
+  "name": "矿底",
+  "status": "draft",
+  "size": {
+    "w": 24,
+    "h": 14
+  },
+  "tile_size": 16,
+  "legend": {
+    "#": "rock",
+    ".": "empty",
+    "w": "water",
+    "b": "bamboo",
+    "c": "coal",
+    "u": "sulfur",
+    "y": "yin_qi"
+  },
+  "grid": [
+    "########################",
+    "#......................#",
+    "#..cc..............yy..#",
+    "#.................yyy..#",
+    "#......................#",
+    "#....bbb........bbb....#",
+    "#......................#",
+    "#......................#",
+    "#......................#",
+    "#..u................u..#",
+    "#..ww..............cc..#",
+    "#..www.................#",
+    "#..wwww................#",
+    "########################"
+  ],
+  "entities": [
+    {
+      "id": "boss-spawn-drought",
+      "type": "spawn_anchor",
+      "x": 14,
+      "y": 11,
+      "payload": {
+        "boss_id": "boss-drought-demon",
+        "table": "boss",
+        "count": 1
+      }
+    },
+    {
+      "id": "rule-stele-boss",
+      "type": "rule_stele",
+      "x": 4,
+      "y": 4,
+      "payload": {
+        "rule_id": "no-open-flame"
+      }
+    },
+    {
+      "id": "exit-layer-01",
+      "type": "exit",
+      "x": 21,
+      "y": 11,
+      "payload": {
+        "to": "hub-cave",
+        "label": "矿底出口"
+      }
+    }
+  ],
+  "hazards": [
+    "gas_explosion",
+    "collapse"
+  ],
+  "intended_rules": [
+    "no-open-flame"
+  ],
+  "notes": [
+    "M1-04 旱魃 BOSS 房：左下蓄水池 + 右上阴气渗漏区，对应旱魃 weak_to: [water, yin_qi]、resist: [火]",
+    "双侧竹木平台提供高处视野与纵火/规避空间"
+  ]
+}
