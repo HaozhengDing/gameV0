@@ -209,6 +209,71 @@ void inject_typical(sim_world* w, uint64_t tick) {
     }
 }
 
+// ------------------------------ burn-worst 场景（M1-12 全屏燃烧 + 反应压测） ------------------------------
+
+uint16_t pick_burn_material(uint64_t r) {
+    const uint32_t pct = static_cast<uint32_t>(r % 100u);
+    if (pct < 20) return SIM_MAT_BAMBOO;
+    if (pct < 38) return SIM_MAT_COAL;
+    if (pct < 52) return SIM_MAT_SULFUR;
+    if (pct < 62) return SIM_MAT_OIL;
+    if (pct < 70) return SIM_MAT_WATER;
+    if (pct < 74) return SIM_MAT_SALTPETER;
+    if (pct < 82) return SIM_MAT_FIRE;
+    return SIM_MAT_EMPTY;
+}
+
+void build_burn_worst(sim_world* w, uint64_t seed) {
+    uint64_t rng = seed ^ 0xBB67AE8584CAA73BULL;
+    for (uint32_t y = 0; y < kWorstH; ++y) {
+        for (uint32_t x = 0; x < kWorstW; ++x) {
+            const uint16_t mat = pick_burn_material(rng_next(&rng));
+            if (mat != SIM_MAT_EMPTY) {
+                sim_world_set_cell(w, static_cast<int32_t>(x), static_cast<int32_t>(y), mat);
+            }
+        }
+    }
+    sim_rect full{0, 0, static_cast<int32_t>(kWorstW), static_cast<int32_t>(kWorstH)};
+    sim_world_set_active_rect(w, full);
+    sim_world_wake_rect(w, full);
+    // 初始热爆发点，让全屏快速进入高热燃烧与反应态
+    for (int32_t x = 40; x < static_cast<int32_t>(kWorstW); x += 80) {
+        for (int32_t y = 40; y < static_cast<int32_t>(kWorstH); y += 80) {
+            sim_world_apply_heat_burst(w, x, y, 16, 400.0f);
+        }
+    }
+}
+
+void inject_burn_worst(sim_world* w, uint64_t tick) {
+    if (tick % 120u != 0u) return;
+    const sim_rect a = sim_world_get_active_rect(w);
+    uint64_t rng = mix64(0xB012CAFEULL ^ (tick * 0x2545F4914F6CDD1DULL));
+    for (int i = 0; i < 1200; ++i) {
+        const int32_t x = a.x + static_cast<int32_t>(rng_next(&rng) % static_cast<uint32_t>(a.w));
+        const int32_t y = a.y + static_cast<int32_t>(rng_next(&rng) % static_cast<uint32_t>(a.h));
+        const uint16_t mat = pick_burn_material(rng_next(&rng));
+        if (mat != SIM_MAT_EMPTY) sim_world_set_cell(w, x, y, mat);
+    }
+    for (int i = 0; i < 6; ++i) {
+        const int32_t x = a.x + static_cast<int32_t>(rng_next(&rng) % static_cast<uint32_t>(a.w));
+        const int32_t y = a.y + static_cast<int32_t>(rng_next(&rng) % static_cast<uint32_t>(a.h));
+        sim_world_apply_heat_burst(w, x, y, 12, 400.0f);
+    }
+}
+
+void pan_typical_viewport(sim_world* w, uint64_t tick) {
+    if (tick % 200u != 0u) return;
+    // 在 1440x810 内按环形轨迹平滑跳转活跃视口（480x270），模拟相机探索唤醒新 chunk
+    const uint64_t step = (tick / 200u) % 9u;
+    const int32_t gx = static_cast<int32_t>(step % 3u);
+    const int32_t gy = static_cast<int32_t>(step / 3u);
+    const int32_t vx = gx * 480;
+    const int32_t vy = gy * 270;
+    sim_rect rect{vx, vy, 480, 270};
+    sim_world_set_active_rect(w, rect);
+    sim_world_wake_rect(w, rect);
+}
+
 // ------------------------------ 统计 / 输出 ------------------------------
 
 struct Percentiles {
@@ -266,30 +331,38 @@ RunResult run_one(const std::string& label, const std::string& scenario, bool fo
     out.scenario = scenario;
     out.force_wake = force_wake;
     out.ticks = ticks;
-    const bool worst = scenario == "worst";
-    sim_world* w = create_world(worst ? kWorstW : kTypicalW, worst ? kWorstH : kTypicalH, seed,
-                                materials_path);
+    const bool is_worst = (scenario == "worst");
+    const bool is_burn = (scenario == "burn-worst");
+    const bool is_pan = (scenario == "typical-pan");
+    const bool single_screen = (is_worst || is_burn);
+    sim_world* w = create_world(single_screen ? kWorstW : kTypicalW,
+                                single_screen ? kWorstH : kTypicalH, seed, materials_path);
     if (w == nullptr) {
         out.error = "sim_world_create failed";
         return out;
     }
-    if (worst) {
+    if (is_worst) {
         build_worst(w, seed);
+    } else if (is_burn) {
+        build_burn_worst(w, seed);
     } else {
         build_typical(w, seed);
     }
     out.material_source = sim_world_materials_source(w);
-    const sim_rect active = sim_world_get_active_rect(w);
     std::vector<double> samples(ticks);
     double sum_active = 0.0;
     double sum_awake = 0.0;
     for (uint32_t i = 0; i < ticks; ++i) {
         const uint64_t tick = static_cast<uint64_t>(i) + 1;
-        if (worst) {
+        if (is_worst) {
             inject_worst(w, tick);
+        } else if (is_burn) {
+            inject_burn_worst(w, tick);
         } else {
             inject_typical(w, tick);
+            if (is_pan) pan_typical_viewport(w, tick);
         }
+        const sim_rect active = sim_world_get_active_rect(w);
         if (force_wake) sim_world_wake_rect(w, active);
         const auto t0 = Clock::now();
         sim_world_step(w);
@@ -351,10 +424,15 @@ void write_summary(const fs::path& dir, const std::string& materials_path,
     f << "  worst:   " << kWorstW << "x" << kWorstH
       << " = 1 screen; ~78% filled with sand/water/oil/quicksilver/fire; "
          "wake mode forces all 40 chunks every tick; injection every 150 ticks (outside timing)\n";
-    f << "  typical: " << kTypicalW << "x" << kTypicalH << " = 3x3 screens mine greybox; "
+    f << "  typical:     " << kTypicalW << "x" << kTypicalH << " = 3x3 screens mine greybox; "
          "all 299 chunks loaded; active viewport 480x270 in the middle; "
          "re-ignite/drip every 200/250 ticks (outside timing); "
          "wake mode forces the 40 viewport chunks every tick (sensitivity upper bound)\n";
+    f << "  burn-worst:  " << kWorstW << "x" << kWorstH
+      << " = 1 screen; ~82% filled with bamboo/coal/sulfur/oil/water/saltpeter/fire + heat bursts "
+         "every 120 ticks (M1-12 full-screen combustion & reaction stress)\n";
+    f << "  typical-pan: " << kTypicalW << "x" << kTypicalH
+      << " = 3x3 screens mine greybox; active 480x270 viewport pans across all 9 tiles every 200 ticks\n";
     f << "  timing: only sim_world_step is measured; 1 tick = 1/60 s.\n";
     f << "\nPNG frames: " << dir.string() << "/*.png\n";
 }
@@ -432,6 +510,16 @@ int main(int argc, char** argv) {
     results.push_back(run_one("typical-wake", "typical", true, ticks, seed,
                               materials_path.empty() ? nullptr : materials_path.c_str(), frame_dir,
                               false));
+    // M1-12 扩展压测：全屏燃烧反应 + 相机平移唤醒
+    results.push_back(run_one("burn-worst", "burn-worst", false, ticks, seed,
+                              materials_path.empty() ? nullptr : materials_path.c_str(), frame_dir,
+                              write_frames));
+    results.push_back(run_one("burn-wake", "burn-worst", true, ticks, seed,
+                              materials_path.empty() ? nullptr : materials_path.c_str(), frame_dir,
+                              false));
+    results.push_back(run_one("typical-pan", "typical-pan", false, ticks, seed,
+                              materials_path.empty() ? nullptr : materials_path.c_str(), frame_dir,
+                              false));
     std::printf("\n");
     for (const RunResult& r : results) print_row(r);
     std::printf("\n");
@@ -440,10 +528,17 @@ int main(int argc, char** argv) {
     const RunResult& worst_sleep = results[1];
     const RunResult& typical_sleep = results[2];
     const RunResult& typical_wake = results[3];
-    std::printf("worst p95  = %.3f ms (wake/保守上界), %.3f ms (sleep/默认) | D4 目标 <= 6.000 ms\n",
+    const RunResult& burn_worst = results[4];
+    const RunResult& burn_wake = results[5];
+    const RunResult& typical_pan = results[6];
+    std::printf("worst p95     = %.3f ms (wake/保守上界), %.3f ms (sleep/默认) | D4 目标 <= 6.000 ms\n",
                 worst_wake.pct.p95, worst_sleep.pct.p95);
-    std::printf("typical p95= %.3f ms (sleep/默认), %.3f ms (wake/敏感性) | D4 目标 <= 2.000 ms\n",
+    std::printf("typical p95   = %.3f ms (sleep/默认), %.3f ms (wake/敏感性) | D4 目标 <= 2.000 ms\n",
                 typical_sleep.pct.p95, typical_wake.pct.p95);
+    std::printf("burn-worst p95= %.3f ms (sleep/默认), %.3f ms (wake/保守上界) | M1-12 目标 <= 6.000 ms\n",
+                burn_worst.pct.p95, burn_wake.pct.p95);
+    std::printf("typical-pan   = p95 %.3f ms, p99 %.3f ms | M1-12 视口平移无尖刺验证\n",
+                typical_pan.pct.p95, typical_pan.pct.p99);
     write_summary(frame_dir, materials_path, results, seed, ticks);
     std::printf("summary written: %s\n", (frame_dir / "summary.txt").string().c_str());
     bool ok = true;

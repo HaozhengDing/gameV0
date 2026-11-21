@@ -68,14 +68,14 @@
 | C-DATA 数据格式 | `data/README.md` + `tools/validate_data.py` | 已有 v0；T0 守护 | M0 W1 | sim、VM、关卡、经济 |
 | C-VM 符箓语义 | `docs/tech/talisman-vm-spec.md` + `tests/vm_cases/` | T1（v0.1 已拍板 2026-11-16） | M0 W2 | T3、T4、所有符的内容 |
 | C-ACT VM 动作 → 世界 | 同上规格 §3（16 种动作 + 物质 id 来源） | T1（草案 v0.1 已出） | M0 W2 | T4、M1 战斗 |
-| C-SIM 模拟接口 | `sim_core/include/sim/c_sim.h`（**v2**：v1 冻结后于 T4b 追加 9 种 data 物质，已有 id 不变） | T2（已出；v2 见 T4b） | M0 W3 | T4、M1 全部玩法 |
+| C-SIM 模拟接口 | `sim_core/include/sim/c_sim.h`（**v3**：M1-12 追加 3 二级气体 + 热源/邻域反应表 + `apply_heat_burst` / `REACTION` 事件；v1/v2 已有 id 不变） | T2 / M1-12（v3 已出 2026-11-20） | M0 W3 / M1 W2 | T4、M1 全部玩法 |
 | C-EVT 世界事件 | `docs/tech/m1-01-contracts-evt-text.md` Part 1（**v0.1 已冻结 2026-11-20**，`game/scripts/event_bus.gd`） | M1-01 | M1 W1 | 玩法、UI、音频、可读性表达 |
 | C-TEXT 文本键 | `docs/tech/m1-01-contracts-evt-text.md` Part 2 + `data/texts/zh-CN.json`（**v0.1 已冻结 2026-11-20**，`validate_data.py` 守护） | M1-01 | M1 W1 | UI、规矩文本、本地化、版号词表替换（设计原文风险 1） |
 | C-SAVE 存档 | chunk 差分 + 实体 + seed（设计原文 4.6） | M2 计划 | M2 开头 | 祠堂怨灵、Demo |
 
 **改契约的规矩**：版本号 +1；写一篇 log，列出受影响的下游任务；`tools/validate_data.py` 能检查的就加检查。
 
-**2026-11-15 契约状态**：C-DATA 已生效（T0 + CI 守护，新增 C-VM 用例守护）；**C-SIM v1 已冻结**（`sim_core/include/sim/c_sim.h`，破坏性改动必须版本号 +1，log -08）；**C-SIM v2**（2026-11-16，T4b）只在末尾追加 9 种 data 物质（black_dog_blood/coal/saltpeter/sulfur/cinnabar/lime/glutinous_rice/bamboo/yin_qi），已有 id/语义/基准不变；**C-VM / C-ACT v0.1 已拍板**（2026-11-16 用户对 spec §7.3 全部 6 条按 AI 建议拍板；`docs/tech/talisman-vm-spec.md` + `tests/vm_cases/` 30 条，log -09、2026-11-16-02）；C-VM 动作由谁在世界层执行见 spec §3.1/§3.2，T4 接入时以该节为准。
+**契约状态（截至 2026-11-20）**：C-DATA 已生效（T0 + CI 守护，新增 C-VM 与 C-TEXT 机检）；**C-SIM v3 已生效**（2026-11-20，M1-12：在 v1/v2 基础上末尾追加 `smoke`/`toxic_smoke`/`steam`，落地热源+邻域阈值与 5 条格层反应，已有 id 与 5 物质基准不变，详见 `docs/log/2026-11-20-08-m1-12-csim-v3-reactions.md`）；**C-VM / C-ACT v0.1 已拍板**（2026-11-16，`docs/tech/talisman-vm-spec.md` + `tests/vm_cases/` 30 条）；**C-EVT v0.1 / C-TEXT v0.1 已冻结**（2026-11-20，M1-01，`docs/tech/m1-01-contracts-evt-text.md`）。
 
 ### 3.4 打桩：把硬依赖变软
 

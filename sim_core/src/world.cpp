@@ -34,6 +34,14 @@ constexpr uint64_t kSaltIgnite = 0xA5A5F00DC0FFEE01ULL;
 constexpr uint64_t kSaltDebris = 0x0DEB715E0BADC0DEULL;
 constexpr uint64_t kSaltFireLife = 0xF11E11FE12345678ULL;
 constexpr uint64_t kSaltRender = 0x5EED5EED5EED5EEDULL;
+constexpr uint64_t kSaltReact = 0x91E10DA5C79E7B1DULL;
+constexpr uint64_t kSaltGasDrift = 0x6A09E667BB67AE85ULL;
+constexpr float kFireSourceHeat = 400.0f;
+constexpr float kBurningFuelHeat = 350.0f;
+constexpr float kIgniteBaseRate = 0.02f;
+constexpr float kIgniteTempScale = 200.0f;
+constexpr float kSteamCondenseChance = 0.25f;
+constexpr uint32_t kMaxBlackPowderPerTick = 4;
 
 inline uint64_t mix64(uint64_t z) {
     z += 0x9E3779B97F4A7C15ULL;
@@ -78,6 +86,10 @@ struct sim_world {
     std::array<uint8_t, SIM_MAT_COUNT_> mat_life_min{};
     std::array<uint8_t, SIM_MAT_COUNT_> mat_life_max{};
     std::array<float, SIM_MAT_COUNT_> mat_ignite{};
+    std::array<float, SIM_MAT_COUNT_> mat_ignition_temp{};
+    std::array<uint16_t, SIM_MAT_COUNT_> mat_burn_time{};
+    std::array<uint16_t, SIM_MAT_COUNT_> mat_burn_product{};
+    uint32_t tick_black_powder_blasts = 0;
 
     // 活动区 [ax0, ax1) x [ay0, ay1)，已裁剪到世界内。
     int32_t ax0 = 0;
@@ -274,8 +286,257 @@ struct sim_world {
         touch(x, y);
     }
 
+    // ---------------- 反应与热/火工具（C-SIM v3） ----------------
+    inline uint8_t gas_initial_life(int32_t x, int32_t y, uint16_t mat) const {
+        if (mat >= SIM_MAT_COUNT_) return 60;
+        const int32_t lo = mat_life_min[mat];
+        const int32_t hi = mat_life_max[mat];
+        if (hi <= lo) return static_cast<uint8_t>(std::max(1, lo));
+        const uint32_t span = static_cast<uint32_t>(hi - lo + 1);
+        return static_cast<uint8_t>(
+            lo + static_cast<int32_t>(cell_random(x, y, kSaltFireLife) % span));
+    }
+
+    inline bool spawn_gas_near(int32_t x, int32_t y, uint8_t gas_mat) {
+        const int32_t ox[5] = {x, x - 1, x + 1, x - 1, x + 1};
+        const int32_t oy[5] = {y - 1, y - 1, y - 1, y, y};
+        for (int k = 0; k < 5; ++k) {
+            const int32_t nx = ox[k];
+            const int32_t ny = oy[k];
+            if (!empty_at(nx, ny)) continue;
+            set_cell_raw(nx, ny, gas_mat, gas_initial_life(nx, ny, gas_mat));
+            return true;
+        }
+        return false;
+    }
+
+    inline bool has_black_powder_mix(int32_t cx, int32_t cy) const {
+        bool has_n = false;
+        bool has_s = false;
+        bool has_c = false;
+        const int32_t x0 = std::max(ax0, cx - 3);
+        const int32_t x1 = std::min(ax1 - 1, cx + 3);
+        const int32_t y0 = std::max(ay0, cy - 3);
+        const int32_t y1 = std::min(ay1 - 1, cy + 3);
+        for (int32_t y = y0; y <= y1; ++y) {
+            for (int32_t x = x0; x <= x1; ++x) {
+                const uint32_t ci = chunk_index_xy(x, y);
+                if (!chunks[ci].loaded) continue;
+                const uint8_t m =
+                    chunks[ci].cells[((static_cast<uint32_t>(y) & 63u) << 6) |
+                                     (static_cast<uint32_t>(x) & 63u)]
+                        .mat;
+                if (m == SIM_MAT_SALTPETER) has_n = true;
+                else if (m == SIM_MAT_SULFUR) has_s = true;
+                else if (m == SIM_MAT_COAL) has_c = true;
+                if (has_n && has_s && has_c) return true;
+            }
+        }
+        return false;
+    }
+
+    // r-black-powder（priority 10）：消耗半径内硝+硫+煤并炸开坑洞、喷火与烟。
+    void trigger_black_powder(int32_t cx, int32_t cy) {
+        if (tick_black_powder_blasts >= kMaxBlackPowderPerTick) return;
+        ++tick_black_powder_blasts;
+        constexpr int32_t kBlastR = 16;
+        constexpr int32_t kBlastR2 = kBlastR * kBlastR;
+        const int32_t x0 = std::max<int32_t>(0, cx - kBlastR);
+        const int32_t x1 = std::min<int32_t>(static_cast<int32_t>(width) - 1, cx + kBlastR);
+        const int32_t y0 = std::max<int32_t>(0, cy - kBlastR);
+        const int32_t y1 = std::min<int32_t>(static_cast<int32_t>(height) - 1, cy + kBlastR);
+        for (int32_t y = y0; y <= y1; ++y) {
+            const int32_t dy = y - cy;
+            for (int32_t x = x0; x <= x1; ++x) {
+                const int32_t dx = x - cx;
+                const int32_t d2 = dx * dx + dy * dy;
+                if (d2 > kBlastR2) continue;
+                const uint32_t ci = chunk_index_xy(x, y);
+                if (!chunks[ci].loaded) continue;
+                Cell& c = chunks[ci].cells[((static_cast<uint32_t>(y) & 63u) << 6) |
+                                           (static_cast<uint32_t>(x) & 63u)];
+                const uint8_t m = c.mat;
+                const bool is_bp_mat =
+                    (m == SIM_MAT_SALTPETER || m == SIM_MAT_SULFUR || m == SIM_MAT_COAL);
+                const uint8_t st = mat_state[m];
+                if (m != SIM_MAT_EMPTY && !is_bp_mat && st != SIM_STATE_STATIC &&
+                    st != SIM_STATE_POWDER) {
+                    continue;
+                }
+                const uint32_t roll = static_cast<uint32_t>(tick_random(x, y, kSaltReact) & 0xFFu);
+                if (d2 <= 100 && roll < 70u) {
+                    set_cell_raw(x, y, SIM_MAT_FIRE, gas_initial_life(x, y, SIM_MAT_FIRE));
+                } else if (d2 <= 144 && roll < 115u) {
+                    set_cell_raw(x, y, SIM_MAT_SMOKE, gas_initial_life(x, y, SIM_MAT_SMOKE));
+                } else if (!is_bp_mat && d2 > 144 && st == SIM_STATE_STATIC && roll < 155u) {
+                    set_cell_raw(x, y, SIM_MAT_SAND, 0);
+                } else {
+                    set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+                }
+            }
+        }
+        wake_rect_impl(sim_rect{cx - kBlastR - 4, cy - kBlastR - 4, 2 * kBlastR + 9, 2 * kBlastR + 9});
+        push_event(SIM_EVENT_REACTION, SIM_MAT_SALTPETER, cx, cy, SIM_REACT_BLACK_POWDER);
+    }
+
+    // 局部热判定（priority 10 黑火药 > priority 1 硫磺毒烟 > priority 0 可燃物点燃）。
+    // 返回 1 表示本格发生了反应或点燃。
+    inline uint32_t apply_heat_to_cell(int32_t nx, int32_t ny, float heat_temp, bool burst) {
+        if (nx < 0 || ny < 0 || nx >= static_cast<int32_t>(width) ||
+            ny >= static_cast<int32_t>(height)) {
+            return 0;
+        }
+        if (!burst && !in_active(nx, ny)) return 0;
+        const uint32_t ci = chunk_index_xy(nx, ny);
+        if (!chunks[ci].loaded) return 0;
+        Cell& n = chunks[ci].cells[((static_cast<uint32_t>(ny) & 63u) << 6) |
+                                   (static_cast<uint32_t>(nx) & 63u)];
+        const uint8_t nm = n.mat;
+        if (nm == SIM_MAT_EMPTY) return 0;
+
+        // Priority 10: r-black-powder (heat >= 120, saltpeter + sulfur + coal)
+        if (heat_temp >= 120.0f &&
+            (nm == SIM_MAT_SALTPETER || nm == SIM_MAT_SULFUR || nm == SIM_MAT_COAL)) {
+            if (has_black_powder_mix(nx, ny)) {
+                trigger_black_powder(nx, ny);
+                return 1;
+            }
+        }
+
+        // Priority 1: r-sulfur-toxic-smoke (heat >= 80, consumes: [])
+        if (nm == SIM_MAT_SULFUR && heat_temp >= 80.0f) {
+            const float smoke_p = burst ? 0.85f : 0.14f;
+            if (rand01(nx, ny, kSaltReact) < smoke_p) {
+                if (spawn_gas_near(nx, ny, SIM_MAT_TOXIC_SMOKE)) {
+                    push_event(SIM_EVENT_REACTION, SIM_MAT_SULFUR, nx, ny,
+                               SIM_REACT_SULFUR_TOXIC_SMOKE);
+                    push_event(SIM_EVENT_SMOKE, SIM_MAT_TOXIC_SMOKE, nx, ny, 0);
+                }
+            }
+            // 若温度未达硫磺燃点（250°），只冒毒烟、不点燃消耗硫磺
+            if (heat_temp < mat_ignition_temp[SIM_MAT_SULFUR]) {
+                return 1;
+            }
+        }
+
+        // Priority 0: 可燃材质点燃（油直接变火；煤/硫磺/竹木进入 aux 燃烧态）
+        if (mat_flammable[nm] == 0) return 0;
+        const float ign_t = mat_ignition_temp[nm];
+        if (ign_t > 0.0f && heat_temp < ign_t) return 0;
+        if (mat_burn_time[nm] == 0) {
+            // 油等瞬燃液体：沿用 v1 5%/tick（burst 下高概率）
+            const float p = burst ? 0.85f : mat_ignite[nm];
+            if (p <= 0.0f) return 0;
+            if (rand01(nx, ny, kSaltIgnite) < p) {
+                ignite_cell(nx, ny, nm);
+                return 1;
+            }
+            return 0;
+        }
+        // 固体/粉末燃料（竹木/煤/硫磺）：aux > 0 表示已在燃烧
+        if (n.aux > 0) return 0;
+        float mult = (heat_temp - ign_t) / kIgniteTempScale;
+        mult = std::min(2.0f, std::max(0.25f, mult));
+        const float p = burst ? 0.85f : (kIgniteBaseRate * mult);
+        if (rand01(nx, ny, kSaltIgnite) < p) {
+            const uint16_t bt = mat_burn_time[nm];
+            n.aux = static_cast<uint8_t>(bt > 255u ? 255u : std::max<uint16_t>(bt, 1u));
+            n.stamp = static_cast<uint8_t>(tick);
+            ++last_stats.changed_cells;
+            touch(nx, ny);
+            push_event(SIM_EVENT_FIRE_IGNITED, nm, nx, ny, n.aux);
+            return 1;
+        }
+        return 0;
+    }
+
+    // 燃烧中的固体/粉末燃料（竹木/煤/硫磺，aux > 0）。返回 true 表示本格已转化/消亡。
+    inline bool process_burning_fuel(int32_t x, int32_t y, Cell& c) {
+        const uint8_t m = c.mat;
+        // 遇水立刻熄灭并冒蒸汽
+        if (neighbor_has_water(x, y)) {
+            c.aux = 0;
+            c.stamp = static_cast<uint8_t>(tick);
+            ++last_stats.changed_cells;
+            touch(x, y);
+            push_event(SIM_EVENT_FIRE_EXTINGUISHED, m, x, y, 0);
+            if (spawn_gas_near(x, y, SIM_MAT_STEAM)) {
+                push_event(SIM_EVENT_STEAM, SIM_MAT_STEAM, x, y, 0);
+            }
+            return false;
+        }
+        // 作为局部热源向 4 邻域传热（支持平铺煤/硫堆与竹木蔓延）
+        const int32_t ox[4] = {x - 1, x + 1, x, x};
+        const int32_t oy[4] = {y, y, y - 1, y + 1};
+        for (int k = 0; k < 4; ++k) {
+            apply_heat_to_cell(ox[k], oy[k], kBurningFuelHeat, false);
+        }
+        // 上方有空位时偶发冒出一朵跳动火苗
+        if (rand01(x, y, kSaltGasDrift) < 0.10f) {
+            spawn_gas_near(x, y, SIM_MAT_FIRE);
+        }
+        // 燃烧计时递减；归零时转为燃尽产物
+        if (c.aux <= 1) {
+            const uint16_t prod = mat_burn_product[m];
+            if (m == SIM_MAT_BAMBOO && prod == SIM_MAT_COAL) {
+                set_cell_raw(x, y, SIM_MAT_COAL, 0);
+                push_event(SIM_EVENT_REACTION, SIM_MAT_BAMBOO, x, y, SIM_REACT_BAMBOO_BURN);
+                if (spawn_gas_near(x, y, SIM_MAT_SMOKE)) {
+                    push_event(SIM_EVENT_SMOKE, SIM_MAT_SMOKE, x, y, 0);
+                }
+            } else if (prod == SIM_MAT_SMOKE || prod == SIM_MAT_TOXIC_SMOKE) {
+                const uint8_t gm = static_cast<uint8_t>(prod);
+                set_cell_raw(x, y, gm, gas_initial_life(x, y, gm));
+                push_event(SIM_EVENT_SMOKE, gm, x, y, 0);
+            } else {
+                set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+            }
+            push_event(SIM_EVENT_FIRE_EXTINGUISHED, m, x, y, 0);
+            return true;
+        }
+        --c.aux;
+        ++last_stats.changed_cells;
+        touch(x, y);
+        return false;
+    }
+
     // ---------------- 运动规则 ----------------
     inline void process_powder(int32_t x, int32_t y, uint8_t mat) {
+        Cell& c = cell_at(x, y);
+        // 燃烧中的煤/硫磺先演化燃烧；燃尽转为气体后不再按粉末下落
+        if (c.aux > 0 && mat_burn_time[mat] > 0) {
+            if (process_burning_fuel(x, y, c)) return;
+        }
+        // 接触反应：r-lime-steam（石灰 + 水 -> 蒸汽，全消耗）
+        if (mat == SIM_MAT_LIME) {
+            const int32_t ox[4] = {x - 1, x + 1, x, x};
+            const int32_t oy[4] = {y, y, y - 1, y + 1};
+            for (int k = 0; k < 4; ++k) {
+                const int32_t nx = ox[k], ny = oy[k];
+                if (!in_active(nx, ny) || !chunk_loaded_at(nx, ny)) continue;
+                if (cell_at(nx, ny).mat == SIM_MAT_WATER) {
+                    set_cell_raw(x, y, SIM_MAT_STEAM, gas_initial_life(x, y, SIM_MAT_STEAM));
+                    set_cell_raw(nx, ny, SIM_MAT_STEAM, gas_initial_life(nx, ny, SIM_MAT_STEAM));
+                    push_event(SIM_EVENT_REACTION, SIM_MAT_LIME, x, y, SIM_REACT_LIME_STEAM);
+                    push_event(SIM_EVENT_STEAM, SIM_MAT_STEAM, x, y, 0);
+                    return;
+                }
+            }
+        }
+        // 接触反应：r-rice-purify（糯米 + 阴气 -> 清除阴气，保留糯米）
+        if (mat == SIM_MAT_GLUTINOUS_RICE) {
+            const int32_t ox[4] = {x - 1, x + 1, x, x};
+            const int32_t oy[4] = {y, y, y - 1, y + 1};
+            for (int k = 0; k < 4; ++k) {
+                const int32_t nx = ox[k], ny = oy[k];
+                if (!in_active(nx, ny) || !chunk_loaded_at(nx, ny)) continue;
+                if (cell_at(nx, ny).mat == SIM_MAT_YIN_QI) {
+                    set_cell_raw(nx, ny, SIM_MAT_EMPTY, 0);
+                    push_event(SIM_EVENT_REACTION, SIM_MAT_GLUTINOUS_RICE, nx, ny,
+                               SIM_REACT_RICE_PURIFY);
+                }
+            }
+        }
         if (can_displace(x, y + 1, mat, SIM_STATE_POWDER)) {
             move_to(x, y, x, y + 1);
             return;
@@ -317,53 +578,48 @@ struct sim_world {
     }
 
     inline bool neighbor_has_water(int32_t x, int32_t y) const {
-        if (x > ax0 && cell_at(x - 1, y).mat == SIM_MAT_WATER) return true;
-        if (x + 1 < ax1 && cell_at(x + 1, y).mat == SIM_MAT_WATER) return true;
-        if (y > ay0 && cell_at(x, y - 1).mat == SIM_MAT_WATER) return true;
-        if (y + 1 < ay1 && cell_at(x, y + 1).mat == SIM_MAT_WATER) return true;
+        if (x > ax0 && chunk_loaded_at(x - 1, y) && cell_at(x - 1, y).mat == SIM_MAT_WATER) return true;
+        if (x + 1 < ax1 && chunk_loaded_at(x + 1, y) && cell_at(x + 1, y).mat == SIM_MAT_WATER) return true;
+        if (y > ay0 && chunk_loaded_at(x, y - 1) && cell_at(x, y - 1).mat == SIM_MAT_WATER) return true;
+        if (y + 1 < ay1 && chunk_loaded_at(x, y + 1) && cell_at(x, y + 1).mat == SIM_MAT_WATER) return true;
         return false;
     }
 
-    // 把 (x,y) 处的可燃物质换成火。material = 被烧掉的物质 id。
+    // 把 (x,y) 处的可燃液体（如油）换成火。material = 被烧掉的物质 id。
     inline void ignite_cell(int32_t x, int32_t y, uint8_t material) {
-        const int32_t life_min = mat_life_min[SIM_MAT_FIRE];
-        const int32_t life_max = mat_life_max[SIM_MAT_FIRE];
-        const uint32_t span = static_cast<uint32_t>(life_max - life_min + 1);
-        const uint8_t life = static_cast<uint8_t>(
-            life_min + static_cast<int32_t>(cell_random(x, y, kSaltFireLife) % span));
+        const uint8_t life = gas_initial_life(x, y, SIM_MAT_FIRE);
         set_cell_raw(x, y, SIM_MAT_FIRE, life);
         push_event(SIM_EVENT_FIRE_IGNITED, material, x, y, life);
     }
 
-    inline void process_gas(int32_t x, int32_t y) {
+    inline void process_fire(int32_t x, int32_t y) {
         Cell& c = cell_at(x, y);
         const uint8_t life = c.aux;
-        // 水浇灭（v1：水不被消耗；火的消失不改变水量）
+        // 水浇灭 -> 45% 产蒸汽（水本身不消耗）
         if (neighbor_has_water(x, y)) {
-            set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+            if (rand01(x, y, kSaltReact) < 0.45f) {
+                set_cell_raw(x, y, SIM_MAT_STEAM, gas_initial_life(x, y, SIM_MAT_STEAM));
+                push_event(SIM_EVENT_STEAM, SIM_MAT_STEAM, x, y, 0);
+            } else {
+                set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+            }
             push_event(SIM_EVENT_FIRE_EXTINGUISHED, SIM_MAT_FIRE, x, y, life);
             return;
         }
-        // 点燃相邻的可燃物质（v1：油；将来其它 flammable 材质自动适用）
+        // 热源（400°C）对 4 邻域执行反应表（黑火药 > 硫磺毒烟 > 可燃物点燃）
         const int32_t ox[4] = {x - 1, x + 1, x, x};
         const int32_t oy[4] = {y, y, y - 1, y + 1};
         for (int k = 0; k < 4; ++k) {
-            const int32_t nx = ox[k];
-            const int32_t ny = oy[k];
-            if (nx < ax0 || nx >= ax1 || ny < ay0 || ny >= ay1) continue;
-            const uint32_t ci = chunk_index_xy(nx, ny);
-            if (!chunks[ci].loaded) continue;
-            const Cell& n = chunks[ci].cells[((static_cast<uint32_t>(ny) & 63u) << 6) |
-                                              (static_cast<uint32_t>(nx) & 63u)];
-            const uint8_t nm = n.mat;
-            if (nm == SIM_MAT_EMPTY || mat_flammable[nm] == 0) continue;
-            const float p = mat_ignite[nm];
-            if (p <= 0.0f) continue;
-            if (rand01(nx, ny, kSaltIgnite) < p) ignite_cell(nx, ny, nm);
+            apply_heat_to_cell(ox[k], oy[k], kFireSourceHeat, false);
         }
-        // 寿命：烧完变空
+        // 寿命：烧完 25% 变烟、其余变空
         if (life <= 1) {
-            set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+            if (rand01(x, y, kSaltReact) < 0.25f) {
+                set_cell_raw(x, y, SIM_MAT_SMOKE, gas_initial_life(x, y, SIM_MAT_SMOKE));
+                push_event(SIM_EVENT_SMOKE, SIM_MAT_SMOKE, x, y, 0);
+            } else {
+                set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+            }
             push_event(SIM_EVENT_FIRE_EXTINGUISHED, SIM_MAT_FIRE, x, y, life);
             return;
         }
@@ -385,6 +641,76 @@ struct sim_world {
         }
     }
 
+    // 烟 / 毒烟 / 蒸汽：轻盈上升+横向漂移；蒸汽到期按 25% 凝结回水。
+    inline void process_rising_gas(int32_t x, int32_t y, uint8_t mat) {
+        Cell& c = cell_at(x, y);
+        const uint8_t life = c.aux;
+        if (life <= 1) {
+            if (mat == SIM_MAT_STEAM && rand01(x, y, kSaltReact) < kSteamCondenseChance) {
+                set_cell_raw(x, y, SIM_MAT_WATER, 0);
+            } else {
+                set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+            }
+            return;
+        }
+        c.aux = static_cast<uint8_t>(life - 1);
+        ++last_stats.changed_cells;
+        touch(x, y);
+        const uint64_t r = tick_random(x, y, kSaltGasDrift);
+        const int32_t dir = (r & 1u) ? 1 : -1;
+        if ((r & 3u) != 0u) {
+            if (empty_at(x, y - 1)) {
+                move_to(x, y, x, y - 1);
+                return;
+            }
+            if (empty_at(x + dir, y - 1)) {
+                move_to(x, y, x + dir, y - 1);
+                return;
+            }
+            if (empty_at(x - dir, y - 1)) {
+                move_to(x, y, x - dir, y - 1);
+                return;
+            }
+        }
+        if (empty_at(x + dir, y)) {
+            move_to(x, y, x + dir, y);
+        }
+    }
+
+    // 阴气：缓慢漂浮；触糯米被净化（r-rice-purify）；aux=0 常驻，aux>0 定时消散。
+    inline void process_yin_qi(int32_t x, int32_t y) {
+        const int32_t ox[4] = {x - 1, x + 1, x, x};
+        const int32_t oy[4] = {y, y, y - 1, y + 1};
+        for (int k = 0; k < 4; ++k) {
+            const int32_t nx = ox[k], ny = oy[k];
+            if (!in_active(nx, ny) || !chunk_loaded_at(nx, ny)) continue;
+            if (cell_at(nx, ny).mat == SIM_MAT_GLUTINOUS_RICE) {
+                set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+                push_event(SIM_EVENT_REACTION, SIM_MAT_GLUTINOUS_RICE, x, y,
+                           SIM_REACT_RICE_PURIFY);
+                return;
+            }
+        }
+        Cell& c = cell_at(x, y);
+        if (c.aux > 0) {
+            if (c.aux <= 1) {
+                set_cell_raw(x, y, SIM_MAT_EMPTY, 0);
+                return;
+            }
+            --c.aux;
+            ++last_stats.changed_cells;
+            touch(x, y);
+        }
+        const uint64_t r = tick_random(x, y, kSaltGasDrift);
+        if ((r & 3u) != 0u) return; // 缓慢诡异漂浮
+        const int32_t dir = (r & 4u) ? 1 : -1;
+        if ((r & 8u) && empty_at(x, y - 1)) {
+            move_to(x, y, x, y - 1);
+        } else if (empty_at(x + dir, y)) {
+            move_to(x, y, x + dir, y);
+        }
+    }
+
     inline void process_cell(int32_t x, int32_t y, Cell& c) {
         const uint8_t m = c.mat;
         if (m == SIM_MAT_EMPTY) return;
@@ -397,7 +723,18 @@ struct sim_world {
                 process_liquid(x, y, m);
                 return;
             case SIM_STATE_GAS:
-                process_gas(x, y);
+                if (m == SIM_MAT_FIRE) {
+                    process_fire(x, y);
+                } else if (m == SIM_MAT_YIN_QI) {
+                    process_yin_qi(x, y);
+                } else {
+                    process_rising_gas(x, y, m);
+                }
+                return;
+            case SIM_STATE_STATIC:
+                if (c.aux > 0 && mat_burn_time[m] > 0) {
+                    process_burning_fuel(x, y, c);
+                }
                 return;
             default:
                 return;
@@ -414,11 +751,15 @@ struct sim_world {
             mat_life_min[i] = d ? d->fire_life_min : 40;
             mat_life_max[i] = d ? d->fire_life_max : 110;
             mat_ignite[i] = d ? d->ignite_chance : 0.0f;
+            mat_ignition_temp[i] = d ? d->ignition_temp : 0.0f;
+            mat_burn_time[i] = d ? d->burn_time : 0;
+            mat_burn_product[i] = d ? d->burn_product : static_cast<uint16_t>(SIM_MAT_EMPTY);
         }
     }
 
     void step() {
         ++tick;
+        tick_black_powder_blasts = 0;
         // 上一 tick 标记的 chunk 就是本 tick 要处理的集合
         awake_cur.swap(awake_next);
         awake_next.clear();
@@ -499,7 +840,7 @@ struct sim_world {
 
 extern "C" {
 
-const char* sim_version(void) { return "c-sim/1.0.0"; }
+const char* sim_version(void) { return "c-sim/3.0.0"; }
 
 sim_world* sim_world_create(const sim_config* config) {
     if (config == nullptr) return nullptr;
@@ -653,12 +994,9 @@ int sim_world_set_cell(sim_world* w, int32_t x, int32_t y, uint16_t material) {
     const uint32_t ci = w->chunk_index_xy(x, y);
     if (!w->chunks[ci].loaded) return -1;
     uint8_t aux = 0;
-    if (material == SIM_MAT_FIRE) {
-        const int32_t lo = w->mat_life_min[material];
-        const int32_t hi = w->mat_life_max[material];
-        const uint32_t span = static_cast<uint32_t>(hi - lo + 1);
-        aux = static_cast<uint8_t>(
-            lo + static_cast<int32_t>(w->cell_random(x, y, kSaltFireLife) % span));
+    if (material == SIM_MAT_FIRE || material == SIM_MAT_SMOKE ||
+        material == SIM_MAT_TOXIC_SMOKE || material == SIM_MAT_STEAM) {
+        aux = w->gas_initial_life(x, y, material);
     }
     w->set_cell_raw(x, y, static_cast<uint8_t>(material), aux);
     return 0;
@@ -801,6 +1139,13 @@ int sim_world_render_rgba8(const sim_world* w, sim_rect rect, uint8_t* rgba,
             int32_t r = static_cast<int32_t>((col >> 16) & 0xFFu) + jitter;
             int32_t g = static_cast<int32_t>((col >> 8) & 0xFFu) + jitter;
             int32_t b = static_cast<int32_t>(col & 0xFFu) + jitter;
+            // C-SIM v3：正在燃烧的固体/粉末燃料（aux > 0）叠加橙红余烬闪烁
+            if (aux > 0 && w->mat_burn_time[mat] > 0) {
+                const float flick = 0.55f + 0.45f * static_cast<float>((n >> 10) & 0xFFu) / 255.0f;
+                r = static_cast<int32_t>(r * 0.35f + 255.0f * 0.65f * flick);
+                g = static_cast<int32_t>(g * 0.35f + 110.0f * 0.65f * flick);
+                b = static_cast<int32_t>(b * 0.35f + 24.0f * 0.65f * flick);
+            }
             // 液体表面提亮，便于目测分层
             if (w->mat_state[mat] == SIM_STATE_LIQUID && y > 0) {
                 const uint32_t upi =
@@ -875,6 +1220,48 @@ uint16_t sim_world_material_id_by_str(const sim_world* w, const char* id_str) {
         if (d.id_str == id_str) return d.id;
     }
     return std::numeric_limits<uint16_t>::max();
+}
+
+float sim_world_material_ignition_temp(const sim_world* w, uint16_t id) {
+    if (w == nullptr || id >= SIM_MAT_COUNT_) return 0.0f;
+    return w->mat_ignition_temp[id];
+}
+
+const char* sim_reaction_id_str(uint16_t reaction_id) {
+    switch (reaction_id) {
+        case SIM_REACT_BLACK_POWDER:
+            return "r-black-powder";
+        case SIM_REACT_SULFUR_TOXIC_SMOKE:
+            return "r-sulfur-toxic-smoke";
+        case SIM_REACT_BAMBOO_BURN:
+            return "r-bamboo-burn";
+        case SIM_REACT_LIME_STEAM:
+            return "r-lime-steam";
+        case SIM_REACT_RICE_PURIFY:
+            return "r-rice-purify";
+        default:
+            return "";
+    }
+}
+
+uint32_t sim_world_apply_heat_burst(sim_world* w, int32_t cx, int32_t cy, uint32_t radius,
+                                    float heat_temp) {
+    if (w == nullptr || heat_temp <= 0.0f) return 0;
+    if (radius > 128u) radius = 128u;
+    const int32_t r = static_cast<int32_t>(radius);
+    const int64_t r2 = static_cast<int64_t>(r) * r;
+    w->tick_black_powder_blasts = 0;
+    uint32_t affected = 0;
+    for (int32_t dy = -r; dy <= r; ++dy) {
+        for (int32_t dx = -r; dx <= r; ++dx) {
+            if (static_cast<int64_t>(dx) * dx + static_cast<int64_t>(dy) * dy > r2) continue;
+            affected += w->apply_heat_to_cell(cx + dx, cy + dy, heat_temp, true);
+        }
+    }
+    if (affected > 0) {
+        w->wake_rect_impl(sim_rect{cx - r - 2, cy - r - 2, 2 * r + 5, 2 * r + 5});
+    }
+    return affected;
 }
 
 uint32_t sim_world_poll_events(sim_world* w, sim_event* out, uint32_t capacity) {

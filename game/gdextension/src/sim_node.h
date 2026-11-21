@@ -1,13 +1,15 @@
 #ifndef GDSIM_SIM_NODE_H
 #define GDSIM_SIM_NODE_H
 
-// SimWorldNode：C-SIM v1（sim_core/include/sim/c_sim.h）的 Godot 包装。
+// SimWorldNode：C-SIM v3（sim_core/include/sim/c_sim.h）的 Godot 包装。
 // 只暴露 C ABI；Godot 侧（GDScript/场景）不感知 sim_core 的 C++ 内部实现。
-// 设计目的：T4a 用真 sim_core 替换桩时，Godot 侧代码不需要改（只依赖本类方法）。
+// 设计目的：sim_core 升级时，Godot 侧只依赖本类方法。
 
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
 #include <godot_cpp/classes/sprite2d.hpp>
+#include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/rect2i.hpp>
 #include <godot_cpp/variant/string.hpp>
 
@@ -44,8 +46,16 @@ public:
     void set_cell(int32_t p_x, int32_t p_y, int32_t p_material);
     void set_cell_by_name(int32_t p_x, int32_t p_y, const String &p_material);
     int32_t get_cell(int32_t p_x, int32_t p_y) const;
+    int32_t get_cell_aux(int32_t p_x, int32_t p_y) const;
     int32_t material_id(const String &p_name) const;
     int32_t dig(int32_t p_x, int32_t p_y, int32_t p_radius);
+
+    // M1-12（C-SIM v3）：热冲击 + 反应事件轮询
+    int32_t apply_heat_burst(int32_t p_x, int32_t p_y, int32_t p_radius, float p_heat_temp = 400.0f);
+    Array poll_events(int32_t p_max_count = 256);
+    String reaction_id_str(int32_t p_reaction_id) const;
+    float get_material_ignition_temp(int32_t p_material) const;
+    String get_sim_version() const;
 
     // 渲染：C-SIM 的 RGBA8 调试渲染 → Image/ImageTexture
     Ref<Image> render_image() const;

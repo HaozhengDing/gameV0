@@ -17,11 +17,15 @@ struct MatDef {
     uint32_t color_rgb = 0;
     uint8_t flammable = 0;
     uint8_t experimental = 0; // 1 = sim_core 内定义，不在 data/ 里
-    // --- 以下为 sim 内部运动参数，不暴露进 C-SIM ---
+    // --- 以下为 sim 内部运动与燃烧参数（C-SIM v3 从 data/materials.json 消费） ---
     uint8_t spread = 1;        // 液体每 tick 横向找平的最大步数
     uint8_t fire_life_min = 40;
     uint8_t fire_life_max = 110;
-    float ignite_chance = 0.0f; // 被火点着的概率 / tick / 接触
+    float ignite_chance = 0.0f;  // 油等液体的基础点燃概率 / tick / 接触
+    float temperature = 20.0f;   // 环境基准温度（°C）
+    float ignition_temp = 0.0f;  // 点燃阈值（°C；0 表示不可热燃）
+    uint16_t burn_time = 0;      // 燃烧持续 tick（0 表示瞬间转为火，如油）
+    uint16_t burn_product = 0;   // 燃尽产物材质 id（如 bamboo->coal, sulfur->toxic_smoke）
 };
 
 // 材质表。默认全部为编译期默认值；load() 成功时用 data/materials.json

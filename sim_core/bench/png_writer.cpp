@@ -1,5 +1,13 @@
 #include "png_writer.h"
 
+#ifdef SIM_BENCH_NO_ZLIB
+namespace bench {
+bool write_png_rgba8(const std::string& /*path*/, const uint8_t* /*rgba*/, int /*width*/,
+                     int /*height*/) {
+    return false;
+}
+}  // namespace bench
+#else
 #include <zlib.h>
 
 #include <cstdio>
@@ -75,3 +83,4 @@ bool write_png_rgba8(const std::string& path, const uint8_t* rgba, int width, in
 }
 
 }  // namespace bench
+#endif

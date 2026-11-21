@@ -27,6 +27,15 @@ const OverlayScript := preload("res://scripts/overlay.gd")
 const EventBusScript := preload("res://scripts/event_bus.gd")
 const TextDBScript := preload("res://scripts/text_db.gd")
 
+const REACTION_TEXT_KEYS := {
+	"r-black-powder": "$react_black_powder",
+	"r-sulfur-toxic-smoke": "$react_sulfur_toxic_smoke",
+	"r-bamboo-burn": "$react_bamboo_burn",
+	"r-lime-steam": "$react_lime_steam",
+	"r-rice-purify": "$react_rice_purify",
+}
+const REACTION_LOG_COOLDOWN := 120  # 2s 同类反应 HUD 提示节流（60Hz）
+
 # 场景节点
 var sim: SimWorldNode
 var vm: TalismanVMNode
@@ -55,6 +64,7 @@ var _accum := 0.0
 var _hud_timer := 0.0
 var _last_view := Vector2i(-999999, -999999)
 var _active_rect := Rect2i()
+var _reaction_log_tick: Dictionary = {}
 
 # ================================================================== 生命周期
 
@@ -123,9 +133,9 @@ func _physics_process(delta: float) -> void:
 
 func _tick_once() -> void:
 	sim.step_tick()
+	_drain_sim_events()
 	vm.tick_advance()
 	level.tick_fire_wall()
-	level.tick_flammable_spread(_active_rect)
 	if completed:
 		return
 	if executor.tick_hazards(player.cell_pos()):
@@ -134,6 +144,60 @@ func _tick_once() -> void:
 		hud.log_event("回到起点")
 		_refresh_hud()
 	_check_exit_now()
+
+## M1-12：每 tick 从 C-SIM v3 拉取模拟事件，按反应/类型聚合后发布至 C-EVT（防止单 tick 刷屏）。
+func _drain_sim_events() -> void:
+	if sim == null or not sim.has_world() or event_bus == null:
+		return
+	var raw_events: Array = sim.poll_events(256)
+	if raw_events.is_empty():
+		return
+	var tick: int = sim.get_tick()
+	var reactions: Dictionary = {}   # reaction_id -> {count, pos}
+	var ignited_count := 0
+	var ignited_pos := Vector2i.ZERO
+	for item in raw_events:
+		if not (item is Dictionary):
+			continue
+		var ev: Dictionary = item
+		var ev_type: int = int(ev.get("type", 0))
+		var pos := Vector2i(int(ev.get("x", 0)), int(ev.get("y", 0)))
+		if ev_type == 4: # SIM_EVENT_REACTION
+			var rid: String = String(ev.get("reaction_id", ""))
+			if rid.is_empty():
+				continue
+			if not reactions.has(rid):
+				reactions[rid] = {"count": 1, "pos": pos}
+			else:
+				var rec: Dictionary = reactions[rid]
+				rec["count"] = int(rec["count"]) + 1
+		elif ev_type == 1: # SIM_EVENT_FIRE_IGNITED
+			ignited_count += 1
+			ignited_pos = pos
+	if ignited_count > 0:
+		event_bus.publish("fire_ignited", tick, {
+			"pos": ignited_pos,
+			"value": float(ignited_count),
+		})
+	for rid_raw in reactions.keys():
+		var rid: String = String(rid_raw)
+		var rec: Dictionary = reactions[rid]
+		var pos: Vector2i = rec["pos"]
+		var count: int = int(rec["count"])
+		var text_key: String = String(REACTION_TEXT_KEYS.get(rid, ""))
+		event_bus.publish("reaction_triggered", tick, {
+			"pos": pos,
+			"reaction_id": rid,
+			"value": float(count),
+			"text_key": text_key,
+		})
+		if rid == "r-black-powder" and overlay != null and not smoke_mode:
+			overlay.add_ring(pos, 16.0, Color(1.0, 0.45, 0.12, 0.95))
+		if hud != null and text_db != null and not text_key.is_empty():
+			var last_t: int = int(_reaction_log_tick.get(rid, -99999))
+			if tick - last_t >= REACTION_LOG_COOLDOWN:
+				_reaction_log_tick[rid] = tick
+				hud.log_event(text_db.get_text(text_key))
 
 func _process(delta: float) -> void:
 	if not _world_ready:
@@ -284,11 +348,14 @@ func _create_hud() -> void:
 
 func _create_executor() -> void:
 	executor = ExecutorScript.new()
-	executor.setup(sim, vm, level, player, hud)
+	executor.setup(sim, vm, level, player, hud, event_bus, text_db)
 
 func _start_round() -> void:
 	completed = false
 	selected_group = 0
+	_reaction_log_tick.clear()
+	if event_bus != null:
+		event_bus.reset()
 	if not level.build():
 		push_error("T4B: level.build 失败")
 	player.setup(sim)
@@ -451,6 +518,11 @@ func _refresh_hud() -> void:
 		return
 	var dist_x := maxi(LevelScript.EXIT_CELL.x - player.cell_pos().x, 0)
 	var hint: String = "本轮完成 · R 重开" if completed else "出口 → %d" % dist_x
+	var status_items: Array = []
+	for st_id in executor.get_active_statuses():
+		var st_key := "$status_" + String(st_id)
+		var st_label: String = text_db.get_text(st_key) if (text_db != null and text_db.has_key(st_key)) else String(st_id)
+		status_items.append({"id": String(st_id), "label": st_label})
 	hud.update_state({
 		"hp": executor.lanterns,
 		"hp_max": LANTERNS_MAX,
@@ -467,6 +539,7 @@ func _refresh_hud() -> void:
 		"selected": selected_group,
 		"cursor_mat": _cursor_material_text(),
 		"exit_hint": hint,
+		"statuses": status_items,
 	})
 
 func _cursor_material_text() -> String:
@@ -476,10 +549,18 @@ func _cursor_material_text() -> String:
 	var m: int = sim.get_cell(c.x, c.y)
 	if m <= 0:
 		return "空"
-	var disp: String = sim.get_material_display(m)
+	var id_str: String = sim.get_material_id_str(m)
+	var mat_key := "$mat_" + id_str
+	var disp: String = ""
+	if text_db != null and text_db.has_key(mat_key):
+		disp = text_db.get_text(mat_key)
+	else:
+		disp = sim.get_material_display(m)
 	if disp.is_empty():
-		disp = sim.get_material_id_str(m)
+		disp = id_str
 	if sim.get_material_flammable(m):
+		if sim.get_cell_aux(c.x, c.y) > 0:
+			return disp + " · 燃"
 		return disp + " · 可燃"
 	return disp
 
@@ -625,35 +706,48 @@ func _run_smoke() -> void:
 		sim.set_cell(oil_test_fire.x, oil_test_fire.y, 0)
 		executor.current_liquid = "water"
 	if fail == "":
-		# 手动点火 + 统一 1.5%/tick 可燃材质蔓延（竹木）+ 身体边界火伤检测
+		# C-SIM v3 原生热/火：手动点火竹木 -> 燃料燃烧态(aux>0) -> 120 tick 烧成煤 + 触发 r-bamboo-burn
 		var bamboo_mat: int = sim.material_id("bamboo")
+		var coal_mat: int = sim.material_id("coal")
 		var b_aim: Vector2i = LevelScript.SMOKE_BAMBOO_CELL
 		var bamboo_before := _count_material(b_aim, 8, bamboo_mat)
+		var coal_before := _count_material(b_aim, 8, coal_mat)
 		var init_lit: int = executor.manual_ignite(b_aim)
 		if init_lit <= 0:
 			fail = "手动点火未点燃竹木"
-		elif not executor.is_near_fire(b_aim - Vector2i(ExecutorScript.MANUAL_IGNITE_RADIUS + ExecutorScript.BODY_HALF_W + 1, 0)):
-			fail = "身体盒外扩 1 格未检测到相邻火焰（火伤贴墙失效）"
+		elif not executor.is_near_fire(b_aim - Vector2i(ExecutorScript.MANUAL_IGNITE_RADIUS + ExecutorScript.BODY_HALF_W, 0)):
+			fail = "身体盒外扩 1 格未检测到燃烧中的竹木"
 		else:
-			var bamboo_after_init := _count_material(b_aim, 8, bamboo_mat)
 			_active_rect = Rect2i(360, 240, 48, 64)
 			sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
-			_fast_forward(90)
-			var bamboo_after_spread := _count_material(b_aim, 8, bamboo_mat)
-			if bamboo_after_spread >= bamboo_after_init:
-				fail = "可燃材质未发生火焰蔓延（竹木 %d -> %d -> %d）" % [bamboo_before, bamboo_after_init, bamboo_after_spread]
+			_fast_forward(150)
+			var bamboo_after := _count_material(b_aim, 8, bamboo_mat)
+			var coal_after := _count_material(b_aim, 8, coal_mat)
+			if bamboo_after >= bamboo_before or coal_after <= coal_before:
+				fail = "C-SIM v3 竹木燃烧未转为煤（bamboo %d->%d, coal %d->%d）" % [
+					bamboo_before, bamboo_after, coal_before, coal_after
+				]
 			else:
-				print("T4B_SMOKE_STEP 灰盒火焰补丁 bamboo %d->%d(手动点火)->%d(蔓延90tick)" % [
-					bamboo_before, bamboo_after_init, bamboo_after_spread
+				print("T4B_SMOKE_STEP C-SIMv3竹木燃炭 bamboo %d->%d coal %d->%d" % [
+					bamboo_before, bamboo_after, coal_before, coal_after
 				])
 	if fail == "":
-		# 爆炸坑缘引燃：F-0001 命中 room-02 硫磺块 -> 挖坑后仍引燃坑缘硫磺
+		# 爆炸坑缘热冲击：F-0001 命中 room-02 硫磺块 -> 挖坑后引燃坑缘并产生硫磺毒烟
 		var sulfur_aim := Vector2i(632, 228)
+		_active_rect = Rect2i(600, 196, 64, 64)
+		sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
 		var r_rim: Dictionary = executor.cast("F-0001", sulfur_aim)
+		_drain_sim_events()
+		_fast_forward(20)
+		var toxic_cnt := _count_material(sulfur_aim, 28, sim.material_id("toxic_smoke"))
 		if not bool(r_rim.get("accepted", false)) or int(r_rim.get("ignited", 0)) <= 0:
 			fail = "F-0001 爆炸未引燃坑缘硫磺（ignited=%d）" % int(r_rim.get("ignited", 0))
+		elif toxic_cnt <= 0:
+			fail = "硫磺受热未产生毒烟（toxic_smoke=0）"
 		else:
-			print("T4B_SMOKE_STEP 爆炸坑缘引燃 sulfur ignited=%d" % int(r_rim.get("ignited", 0)))
+			print("T4B_SMOKE_STEP 爆炸坑缘热冲击 sulfur ignited=%d toxic_smoke=%d" % [
+				int(r_rim.get("ignited", 0)), toxic_cnt
+			])
 
 	# 7) 角色物理移动回归：重力下落 / 浮空上升并消耗浮空条 / 落地快充 / 碎屑迈步
 	if fail == "":
@@ -713,6 +807,79 @@ func _run_smoke() -> void:
 			else:
 				print("T4B_SMOKE_STEP M1-01契约 texts=%d evt_seq=%d" % [text_db.entry_count(), event_bus.get_seq()])
 
+	# 9) M1-12 回归：C-SIM v3 契约版本 / 黑火药 / 石灰蒸汽 / 糯米净阴 / 实体灼烧与湿润状态
+	if fail == "":
+		if sim.get_sim_version() != "c-sim/3.0.0":
+			fail = "C-SIM 版本不符：%s（预期 c-sim/3.0.0）" % sim.get_sim_version()
+	if fail == "":
+		# 在西侧干净岩区内开辟 3 处微型沙盒测试反应与 C-EVT 桥接
+		event_bus.reset()
+		var seen_reactions: Dictionary = {}
+		var r_cb := func(e: Dictionary) -> void:
+			if String(e.get("type", "")) == "reaction_triggered":
+				seen_reactions[String(e.get("reaction_id", ""))] = true
+		event_bus.subscribe(r_cb)
+		_active_rect = Rect2i(60, 420, 180, 64)
+		sim.set_active_rect(_active_rect.position.x, _active_rect.position.y, _active_rect.size.x, _active_rect.size.y)
+		# 9a) 黑火药（硝石+硫磺+煤 + 热冲击 -> 爆炸）
+		var bp_c := Vector2i(90, 450)
+		for dy in range(-4, 5):
+			for dx in range(-4, 5):
+				sim.set_cell(bp_c.x + dx, bp_c.y + dy, 0)
+		sim.set_cell_by_name(bp_c.x - 1, bp_c.y, "saltpeter")
+		sim.set_cell_by_name(bp_c.x, bp_c.y, "sulfur")
+		sim.set_cell_by_name(bp_c.x + 1, bp_c.y, "coal")
+		sim.apply_heat_burst(bp_c.x, bp_c.y, 4, 400.0)
+		_drain_sim_events()
+		# 9b) 石灰 + 水 -> 蒸汽
+		var lm_c := Vector2i(140, 450)
+		for dy in range(-3, 4):
+			for dx in range(-3, 4):
+				sim.set_cell(lm_c.x + dx, lm_c.y + dy, 0)
+		for dx in range(-2, 3):
+			sim.set_cell_by_name(lm_c.x + dx, lm_c.y + 3, "rock")
+			sim.set_cell_by_name(lm_c.x + dx, lm_c.y + 2, "water")
+			sim.set_cell_by_name(lm_c.x + dx, lm_c.y + 1, "lime")
+		# 9c) 糯米 + 阴气 -> 清除阴气且保留糯米
+		var rc_c := Vector2i(190, 450)
+		for dy in range(-3, 4):
+			for dx in range(-3, 4):
+				sim.set_cell(rc_c.x + dx, rc_c.y + dy, 0)
+		for dx in range(-2, 3):
+			sim.set_cell_by_name(rc_c.x + dx, rc_c.y + 3, "rock")
+			sim.set_cell_by_name(rc_c.x + dx, rc_c.y + 2, "glutinous_rice")
+			sim.set_cell_by_name(rc_c.x + dx, rc_c.y + 1, "yin_qi")
+		_fast_forward(6)
+		event_bus.unsubscribe(r_cb)
+		var steam_cnt := _count_material(lm_c, 6, sim.material_id("steam"))
+		var rice_cnt := _count_material(rc_c, 5, sim.material_id("glutinous_rice"))
+		var yin_cnt := _count_material(rc_c, 5, sim.material_id("yin_qi"))
+		if not seen_reactions.has("r-black-powder"):
+			fail = "M1-12 桥接未收到 r-black-powder 事件"
+		elif not seen_reactions.has("r-lime-steam") or steam_cnt <= 0:
+			fail = "M1-12 未触发石灰遇水生蒸汽（steam=%d）" % steam_cnt
+		elif not seen_reactions.has("r-rice-purify") or rice_cnt < 5 or yin_cnt != 0:
+			fail = "M1-12 糯米净阴异常（rice=%d yin=%d）" % [rice_cnt, yin_cnt]
+		else:
+			# 9d) 玩家状态机：触火 -> burning，浸水 -> 清除 burning 并获得 wet
+			executor.burning_ticks = 0
+			executor.wet_ticks = 0
+			var st_pos := Vector2i(20, 270)
+			sim.set_cell_by_name(st_pos.x, st_pos.y - 2, "fire")
+			executor.tick_hazards(st_pos)
+			var lit_burn: bool = executor.burning_ticks > 0
+			sim.set_cell(st_pos.x, st_pos.y - 2, 0)
+			sim.set_cell_by_name(st_pos.x, st_pos.y - 1, "water")
+			executor.tick_hazards(st_pos)
+			var cleared_by_water: bool = (executor.burning_ticks == 0 and executor.wet_ticks > 0)
+			sim.set_cell(st_pos.x, st_pos.y - 1, 0)
+			if not lit_burn or not cleared_by_water:
+				fail = "M1-12 实体灼烧/湿润状态异常（burn=%s cleared=%s）" % [str(lit_burn), str(cleared_by_water)]
+			else:
+				print("T4B_SMOKE_STEP M1-12反应与状态 ver=%s react=%d steam=%d rice=%d burn_wet=ok" % [
+					sim.get_sim_version(), seen_reactions.size(), steam_cnt, rice_cnt
+				])
+
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)
 		print("T4B_SMOKE_FAIL " + fail)
@@ -727,9 +894,9 @@ func _run_smoke() -> void:
 func _fast_forward(tick_count: int) -> void:
 	for i in range(tick_count):
 		sim.step_tick()
+		_drain_sim_events()
 		vm.tick_advance()
 		level.tick_fire_wall()
-		level.tick_flammable_spread(_active_rect)
 
 func _count_material(center: Vector2i, radius: int, material: int) -> int:
 	if material < 0:

@@ -40,7 +40,7 @@
 extern "C" {
 #endif
 
-#define SIM_C_SIM_VERSION 2u
+#define SIM_C_SIM_VERSION 3u
 #define SIM_CHUNK_SIZE 64u
 
 /* ------------------------------------------------------------------ */
@@ -76,8 +76,22 @@ typedef enum sim_material {
     SIM_MAT_GLUTINOUS_RICE = 13, /* 糯米（powder） */
     SIM_MAT_BAMBOO = 14,         /* 竹木（static，可燃） */
     SIM_MAT_YIN_QI = 15,         /* 阴气（gas） */
-    SIM_MAT_COUNT_ = 16       /* 有效 id 上界（不含） */
+    /* ---- C-SIM v3（M1-12 起）：热/火与反应表二级气体材质（append-only） ---- */
+    SIM_MAT_SMOKE = 16,          /* 烟（gas，带寿命，燃烧副产） */
+    SIM_MAT_TOXIC_SMOKE = 17,    /* 毒烟（gas，带寿命，硫磺受热/燃烧产物） */
+    SIM_MAT_STEAM = 18,          /* 蒸汽（gas，带寿命，水+火/石灰+水产物，可凝回水） */
+    SIM_MAT_COUNT_ = 19          /* 有效 id 上界（不含） */
 } sim_material;
+
+/* 世界层 5 条细胞反应 id（与 data/materials.json reactions 对应；实体标签类反应由玩法层处理）。 */
+typedef enum sim_reaction_id {
+    SIM_REACT_NONE = 0,
+    SIM_REACT_BLACK_POWDER = 1,       /* r-black-powder（priority 10） */
+    SIM_REACT_SULFUR_TOXIC_SMOKE = 2, /* r-sulfur-toxic-smoke（priority 1） */
+    SIM_REACT_BAMBOO_BURN = 3,        /* r-bamboo-burn（priority 0） */
+    SIM_REACT_LIME_STEAM = 4,         /* r-lime-steam（priority 0） */
+    SIM_REACT_RICE_PURIFY = 5         /* r-rice-purify（priority 0） */
+} sim_reaction_id;
 
 /* 单个 cell 的只读快照。 */
 typedef struct sim_cell {
@@ -132,11 +146,14 @@ typedef struct sim_tick_stats {
     uint32_t events;       /* 本次 tick 新产生的事件数 */
 } sim_tick_stats;
 
-/* 最小事件输出。用于音效 / 粒子 / 玩法回调；不是精确审计日志。 */
+/* 最小事件输出。用于音效 / 粒子 / 玩法回调；C-SIM v3 对齐 C-EVT v0.1 §1.4。 */
 typedef enum sim_event_type {
-    SIM_EVENT_FIRE_IGNITED = 1,       /* 有物质被点燃：x,y 为火的位置，material 为被烧掉的物质 */
-    SIM_EVENT_FIRE_EXTINGUISHED = 2,  /* 火熄灭 / 被水浇灭：x,y 为原火位置 */
-    SIM_EVENT_DIG = 3                 /* 每挖掉一个 cell 一条：x,y 为被挖 cell */
+    SIM_EVENT_FIRE_IGNITED = 1,       /* 有物质被点燃：x,y 为位置，material 为被点燃物质 */
+    SIM_EVENT_FIRE_EXTINGUISHED = 2,  /* 火熄灭 / 被水浇灭：x,y 为原位置 */
+    SIM_EVENT_DIG = 3,                /* 每挖掉一个 cell 一条：x,y 为被挖 cell */
+    SIM_EVENT_REACTION = 4,           /* 反应触发：aux = sim_reaction_id，material = 主反应物 */
+    SIM_EVENT_STEAM = 5,              /* 生成蒸汽：x,y 为位置 */
+    SIM_EVENT_SMOKE = 6               /* 生成烟/毒烟：x,y 为位置，material = smoke/toxic_smoke */
 } sim_event_type;
 
 typedef struct sim_event {
@@ -256,6 +273,16 @@ int sim_world_material_info(const sim_world* world, uint16_t id, sim_material_in
 
 /* 按字符串 id 查材质 id（如 "water"）；找不到返回 UINT16_MAX。 */
 uint16_t sim_world_material_id_by_str(const sim_world* world, const char* id_str);
+
+/* C-SIM v3：查询材质燃点（摄氏度；不可燃为 0）。 */
+float sim_world_material_ignition_temp(const sim_world* world, uint16_t id);
+
+/* C-SIM v3：将 sim_reaction_id 映射为 data/materials.json 的稳定字符串 id（如 "r-black-powder"）。 */
+const char* sim_reaction_id_str(uint16_t reaction_id);
+
+/* C-SIM v3：瞬时热源脉冲（爆炸/火符用），在半径内以 heat_temp 触发热反应与点燃；返回受影响格数。 */
+uint32_t sim_world_apply_heat_burst(sim_world* world, int32_t cx, int32_t cy, uint32_t radius,
+                                    float heat_temp);
 
 /* ------------------------------ 事件 ------------------------------ */
 

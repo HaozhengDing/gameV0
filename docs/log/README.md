@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-20 | [2026-11-20-08-m1-12-csim-v3-reactions.md](2026-11-20-08-m1-12-csim-v3-reactions.md) | 更新 | 详细 | M1-12 落地：C-SIM v3（19 材质/5 格层反应/热火引擎/10k 压测 burn-worst p95 0.82ms）+ GDExtension/EventBus/实体灼烧湿润毒烟状态接入 |
 | 2026-11-20 | [2026-11-20-07-m1-plan-final-and-m1-01-frozen.md](2026-11-20-07-m1-plan-final-and-m1-01-frozen.md) | 决策 + 更新 | 详细 | M1 计划 5 项全拍板生效（含完整 Wang Tile）；M1-01（C-EVT/C-TEXT v0.1）冻结并落地词表、CI 机检与运行时骨架 |
 | 2026-11-20 | [2026-11-20-06-m1-plan-and-contracts-draft.md](2026-11-20-06-m1-plan-and-contracts-draft.md) | 决策 + 建议 | 详细 | M0 conditional 放行：起草 M1 计划（04-m1-plan）与 M1-01 契约（C-EVT / C-TEXT v0.1 草案） |
 | 2026-11-20 | [2026-11-20-05-m0-c-prerun-and-ledger.md](2026-11-20-05-m0-c-prerun-and-ledger.md) | 更新 + 评审 | 详细 | M0 收尾：完成实验 C 7 场景 AI 预演报告骨架（抓出原生水旁路等 4 隐患）与 M0 一页纸评审账本 |

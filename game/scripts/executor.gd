@@ -13,9 +13,15 @@ const LANTERNS_MAX := 7
 const HAZARD_INTERVAL_TICKS := 30   # 每 0.5s（60 tick/s）掉 1 盏
 const BODY_HALF_W := 2              # 与 player.gd 身体碰撞盒一致（x ±2, y -9..0）
 const BODY_HEIGHT := 10
-const IGNITE_RADIUS := 2            # ignite op 固定半径（T4B.md §3.1）
-const EXPLODE_IGNITE_MARGIN := 3    # explode 挖坑后额外引燃坑缘可燃物
-const MANUAL_IGNITE_RADIUS := 3     # F 手动点火半径（灰盒火焰补丁）
+const IGNITE_RADIUS := 3            # ignite op 半径（调用 C-SIM v3 apply_heat_burst）
+const EXPLODE_IGNITE_MARGIN := 4    # explode 挖坑后额外对坑缘施加 400°C 热冲击
+const MANUAL_IGNITE_RADIUS := 3     # F 手动点火热冲击半径
+const HEAT_BURST_TEMP := 400.0      # 热冲击温度（触发黑火药/硫磺毒烟/可燃物点燃）
+const BURNING_DURATION_TICKS := 300 # 灼烧持续 5s（60Hz，见 data/magic_numbers.json fire_heat）
+const WET_DURATION_TICKS := 300     # 湿润持续 5s（免疫点燃且立刻灭灼烧）
+const POISON_DURATION_TICKS := 180  # 中毒持续 3s（接触毒烟触发）
+const BURN_DOT_INTERVAL := 90       # 离火后灼烧每 1.5s 掉 1 盏
+const POISON_DOT_INTERVAL := 120    # 毒烟中毒每 2.0s 掉 1 盏
 const MAX_ACTION_DEPTH := 4
 
 var sim: SimWorldNode
@@ -23,13 +29,20 @@ var vm: TalismanVMNode
 var level
 var player
 var hud
+var event_bus
+var text_db
 
-# 葫芦 / 盏 / 施法反馈
+# 葫芦 / 盏 / 实体状态 / 施法反馈
 var gourd_water := 0
 var gourd_oil := 0
 var current_liquid := "water"
 var lanterns := LANTERNS_MAX
 var damage_ticks := 0
+var burning_ticks := 0
+var wet_ticks := 0
+var poison_ticks := 0
+var _burn_dot_ticks := 0
+var _poison_dot_ticks := 0
 var last_cast_status := "待命"
 
 # 组合统计（HUD/smoke 用）
@@ -40,13 +53,16 @@ var mat_empty := 0
 var mat_water := 3
 var mat_oil := 4
 var mat_fire := 6
+var mat_toxic_smoke := 17
 
-func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud) -> void:
+func setup(p_sim: SimWorldNode, p_vm: TalismanVMNode, p_level, p_player, p_hud, p_event_bus = null, p_text_db = null) -> void:
 	sim = p_sim
 	vm = p_vm
 	level = p_level
 	player = p_player
 	hud = p_hud
+	event_bus = p_event_bus
+	text_db = p_text_db
 	_cache_material_ids()
 
 func _cache_material_ids() -> void:
@@ -56,8 +72,9 @@ func _cache_material_ids() -> void:
 	mat_water = sim.material_id("water")
 	mat_oil = sim.material_id("oil")
 	mat_fire = sim.material_id("fire")
+	mat_toxic_smoke = sim.material_id("toxic_smoke")
 	if mat_water < 0 or mat_oil < 0 or mat_fire < 0:
-		push_error("T4B executor: C-SIM 材质表缺少 water/oil/fire（需要 C-SIM v2）")
+		push_error("T4B executor: C-SIM 材质表缺少 water/oil/fire（需要 C-SIM v3）")
 
 func reset_round() -> void:
 	gourd_water = 0
@@ -65,6 +82,11 @@ func reset_round() -> void:
 	current_liquid = "water"
 	lanterns = LANTERNS_MAX
 	damage_ticks = 0
+	burning_ticks = 0
+	wet_ticks = 0
+	poison_ticks = 0
+	_burn_dot_ticks = 0
+	_poison_dot_ticks = 0
 	last_cast_status = "待命"
 	combo_water_converted = 0
 	combo_fire_doused = 0
@@ -156,29 +178,10 @@ func spray(player_cell: Vector2i, aim_cell: Vector2i) -> Dictionary:
 				combo_fire_doused += doused
 				out["doused"] = doused
 				_log("灭火 %d 格" % doused)
-		else:
-			_track_adjacent_fire(cells)
 	return out
 
-## 喷油时若油线接触既有火焰，登记该火格，使油引信燃到煤/硫/竹木时灰盒补丁能继续蔓延。
-func _track_adjacent_fire(cells: Array) -> void:
-	if level == null:
-		return
-	var w := sim.get_world_width()
-	var h := sim.get_world_height()
-	for raw_c in cells:
-		var c: Vector2i = raw_c
-		for dy in range(-1, 2):
-			for dx in range(-1, 2):
-				var nx := c.x + dx
-				var ny := c.y + dy
-				if nx < 0 or ny < 0 or nx >= w or ny >= h:
-					continue
-				if sim.get_cell(nx, ny) == mat_fire:
-					level.register_fire_cell(nx, ny)
-
-## F：手动点火（灰盒火焰补丁 ②，docs/tech/sim-fire-heat-design.md §5）：
-## 优先点燃瞄准点周围可燃物（油/煤/硫磺/竹木）；若无直接可燃物则在空地放下小火种（半径 1）。
+## F：手动点火（M1-12 接真 C-SIM v3 apply_heat_burst）：
+## 优先向瞄准点施加 400°C 热冲击（触发黑火药/硫磺毒烟/可燃物点燃）；若无受热材质则在空地放下小火种。
 func manual_ignite(aim: Vector2i) -> int:
 	if sim == null or not sim.has_world():
 		return 0
@@ -198,12 +201,10 @@ func manual_ignite(aim: Vector2i) -> int:
 					continue
 				if sim.get_cell(x, y) == mat_empty:
 					sim.set_cell(x, y, mat_fire)
-					if level != null:
-						level.register_fire_cell(x, y)
 					count += 1
 	if count > 0:
-		sim.wake_rect(aim.x - 4, aim.y - 4, 9, 9)
-		_log("手动点火 %d 格" % count)
+		sim.wake_rect(aim.x - 6, aim.y - 6, 13, 13)
+		_log("点火 %d" % count)
 	else:
 		_log("此处无法点火")
 	return count
@@ -217,24 +218,104 @@ func _player_facing() -> Vector2:
 		return f
 	return Vector2.RIGHT
 
-# ------------------------------------------------------------------ 火伤害（§3.2）
+# ------------------------------------------------------------------ 实体状态与环境伤害（M1-12）
 
-## 每 tick 调用：玩家身体盒（5x10）或其外扩 1 格边界接触火 -> 每 30 tick（0.5s）掉 1 盏。
+## 返回当前激活的状态列表（HUD 状态徽章用），按显示优先级排序。
+func get_active_statuses() -> Array[String]:
+	var list: Array[String] = []
+	if burning_ticks > 0:
+		list.append("burning")
+	if wet_ticks > 0:
+		list.append("wet")
+	if poison_ticks > 0:
+		list.append("poison")
+	return list
+
+## 每 tick 调用：结算 湿润 / 灼烧 / 中毒 状态，及直接触火/持续伤盏。
 ## 返回 true 表示盏尽（main.gd 负责把玩家送回起点并复原盏）。
 func tick_hazards(player_cell: Vector2i) -> bool:
-	if not is_near_fire(player_cell):
+	var tick: int = sim.get_tick() if (sim != null and sim.has_world()) else 0
+
+	# 1) 浸水：立即熄灭灼烧并赋予 5s 湿润保护
+	if is_in_water(player_cell):
+		if burning_ticks > 0:
+			burning_ticks = 0
+			_burn_dot_ticks = 0
+			_log("沾水灭火")
+		if wet_ticks == 0 and event_bus != null:
+			event_bus.publish("status_applied", tick, {
+				"target_id": "player", "pos": player_cell, "status": "wet",
+				"value": float(WET_DURATION_TICKS), "text_key": "$status_wet",
+			})
+		wet_ticks = WET_DURATION_TICKS
+	elif wet_ticks > 0:
+		wet_ticks -= 1
+
+	# 2) 毒烟接触：赋予 3s 中毒状态
+	if is_in_toxic_smoke(player_cell):
+		if poison_ticks == 0 and event_bus != null:
+			event_bus.publish("status_applied", tick, {
+				"target_id": "player", "pos": player_cell, "status": "poison",
+				"value": float(POISON_DURATION_TICKS), "text_key": "$status_poison",
+			})
+		poison_ticks = POISON_DURATION_TICKS
+	elif poison_ticks > 0:
+		poison_ticks -= 1
+
+	# 3) 接触明火 / 燃烧中的煤、硫、竹木
+	var near_fire := is_near_fire(player_cell)
+	if near_fire:
+		if wet_ticks <= 0:
+			if burning_ticks == 0 and event_bus != null:
+				event_bus.publish("status_applied", tick, {
+					"target_id": "player", "pos": player_cell, "status": "burning",
+					"value": float(BURNING_DURATION_TICKS), "text_key": "$status_burning",
+				})
+			burning_ticks = BURNING_DURATION_TICKS
+		damage_ticks += 1
+		if damage_ticks >= HAZARD_INTERVAL_TICKS:
+			damage_ticks = 0
+			if _apply_lantern_loss("火伤", player_cell, tick):
+				return true
+	else:
 		damage_ticks = 0
-		return false
-	damage_ticks += 1
-	if damage_ticks < HAZARD_INTERVAL_TICKS:
-		return false
-	damage_ticks = 0
+		if burning_ticks > 0:
+			burning_ticks -= 1
+			_burn_dot_ticks += 1
+			if _burn_dot_ticks >= BURN_DOT_INTERVAL:
+				_burn_dot_ticks = 0
+				if _apply_lantern_loss("灼烧", player_cell, tick):
+					return true
+		else:
+			_burn_dot_ticks = 0
+
+	# 4) 毒烟持续伤盏
+	if poison_ticks > 0:
+		_poison_dot_ticks += 1
+		if _poison_dot_ticks >= POISON_DOT_INTERVAL:
+			_poison_dot_ticks = 0
+			if _apply_lantern_loss("毒烟", player_cell, tick):
+				return true
+	else:
+		_poison_dot_ticks = 0
+
+	return false
+
+func _apply_lantern_loss(source_label: String, pos: Vector2i, tick: int) -> bool:
 	lanterns -= 1
 	if player != null and player.has_method("trigger_hurt_flash"):
 		player.trigger_hurt_flash()
-	_log("火伤 -1（%d/%d）" % [lanterns, LANTERNS_MAX])
+	if event_bus != null:
+		event_bus.publish("lantern_extinguished", tick, {
+			"source_id": source_label, "target_id": "player", "pos": pos, "value": 1.0,
+		})
+	_log("%s -1（%d/%d）" % [source_label, lanterns, LANTERNS_MAX])
 	if lanterns <= 0:
 		lanterns = LANTERNS_MAX
+		burning_ticks = 0
+		poison_ticks = 0
+		_burn_dot_ticks = 0
+		_poison_dot_ticks = 0
 		return true
 	return false
 
@@ -249,7 +330,42 @@ func is_near_fire(center: Vector2i) -> bool:
 			var x := center.x + dx
 			if x < 0 or x >= w:
 				continue
-			if sim.get_cell(x, y) == mat_fire:
+			var m: int = sim.get_cell(x, y)
+			if m == mat_fire:
+				return true
+			if m > 0 and sim.get_material_flammable(m) and sim.get_cell_aux(x, y) > 0:
+				return true
+	return false
+
+func is_in_water(center: Vector2i) -> bool:
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	for dy in range(-BODY_HEIGHT + 1, 1):
+		var y := center.y + dy
+		if y < 0 or y >= h:
+			continue
+		for dx in range(-BODY_HALF_W, BODY_HALF_W + 1):
+			var x := center.x + dx
+			if x < 0 or x >= w:
+				continue
+			if sim.get_cell(x, y) == mat_water:
+				return true
+	return false
+
+func is_in_toxic_smoke(center: Vector2i) -> bool:
+	if mat_toxic_smoke < 0:
+		return false
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	for dy in range(-BODY_HEIGHT + 1, 1):
+		var y := center.y + dy
+		if y < 0 or y >= h:
+			continue
+		for dx in range(-BODY_HALF_W, BODY_HALF_W + 1):
+			var x := center.x + dx
+			if x < 0 or x >= w:
+				continue
+			if sim.get_cell(x, y) == mat_toxic_smoke:
 				return true
 	return false
 
@@ -378,24 +494,9 @@ func _execute_action(action: Dictionary, aim: Vector2i, summary: Dictionary, dep
 
 func _ignite_around(center: Vector2i, radius: int, summary: Dictionary) -> void:
 	var r := maxi(radius, 0)
-	var w := sim.get_world_width()
-	var h := sim.get_world_height()
-	for dy in range(-r, r + 1):
-		for dx in range(-r, r + 1):
-			if dx * dx + dy * dy > r * r:
-				continue
-			var x := center.x + dx
-			var y := center.y + dy
-			if x < 0 or y < 0 or x >= w or y >= h:
-				continue
-			var m: int = sim.get_cell(x, y)
-			if m == mat_empty:
-				continue
-			if sim.get_material_flammable(m):
-				sim.set_cell(x, y, mat_fire)
-				if level != null:
-					level.register_fire_cell(x, y)
-				summary["ignited"] = int(summary["ignited"]) + 1
+	var affected: int = sim.apply_heat_burst(center.x, center.y, r, HEAT_BURST_TEMP)
+	if affected > 0:
+		summary["ignited"] = int(summary["ignited"]) + affected
 
 ## convert_material：瞄准点 radius 内「非静态、非空」的格转为目标材质（静态岩层不动）。
 func _convert_around(center: Vector2i, radius: int, to_name: String, summary: Dictionary) -> void:

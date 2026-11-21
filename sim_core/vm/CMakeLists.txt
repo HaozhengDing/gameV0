@@ -9,7 +9,6 @@ add_library(sim_vm STATIC
     src/cast.cpp
 )
 target_include_directories(sim_vm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_options(sim_vm PRIVATE -Wall -Wextra)
 
 # 用例 harness：Python 把 YAML 转 JSON，C++ runner 用仓库内 json_lite 解析（只读）。
 add_executable(vm_cases_runner
@@ -21,12 +20,10 @@ target_include_directories(vm_cases_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/harness
     ${CMAKE_CURRENT_SOURCE_DIR}/../src   # sim_core/src/json_lite.h（只读复用）
 )
-target_compile_options(vm_cases_runner PRIVATE -Wall -Wextra)
 target_link_libraries(vm_cases_runner PRIVATE sim_vm sim_core)
 
 # C++ 边界测试（T3 复审修复 + spec §7.4.1 补写口径）；独立于 30 条契约用例。
 add_executable(vm_edge_cases harness/edge_cases_main.cpp)
-target_compile_options(vm_edge_cases PRIVATE -Wall -Wextra)
 target_link_libraries(vm_edge_cases PRIVATE sim_vm)
 add_test(NAME vm_edge_cases COMMAND vm_edge_cases)
 set_tests_properties(vm_edge_cases PROPERTIES TIMEOUT 60)

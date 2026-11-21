@@ -369,7 +369,181 @@ bool test_materials_json(const std::string& materials) {
     CHECK(sim_world_material_info(w, SIM_MAT_BLACK_DOG_BLOOD, &info) == 0);
     CHECK(info.state == SIM_STATE_LIQUID);  // extends: water
     CHECK_NEAR(info.density, 1.05, 1e-6);
+    // C-SIM v3：二级气体材质 + 燃点读取
+    CHECK(sim_world_material_info(w, SIM_MAT_SMOKE, &info) == 0);
+    CHECK(info.state == SIM_STATE_GAS);
+    CHECK(sim_world_material_info(w, SIM_MAT_TOXIC_SMOKE, &info) == 0);
+    CHECK(info.state == SIM_STATE_GAS);
+    CHECK(sim_world_material_info(w, SIM_MAT_STEAM, &info) == 0);
+    CHECK(info.state == SIM_STATE_GAS);
+    CHECK_NEAR(sim_world_material_ignition_temp(w, SIM_MAT_BAMBOO), 200.0, 1e-3);
+    CHECK_NEAR(sim_world_material_ignition_temp(w, SIM_MAT_SULFUR), 250.0, 1e-3);
+    CHECK_NEAR(sim_world_material_ignition_temp(w, SIM_MAT_COAL), 300.0, 1e-3);
     sim_world_destroy(w);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// 6) C-SIM v3 反应表与热/火：黑火药(priority 10) / 硫磺毒烟(priority 1, 不耗硫)
+//    / 竹木燃成煤 / 石灰+水->蒸汽与凝结 / 糯米净阴(不耗米) / 水灭火产蒸汽
+// ---------------------------------------------------------------------------
+bool test_reactions_and_heat(const std::string& materials) {
+    const char* mp = materials.empty() ? nullptr : materials.c_str();
+    CHECK(std::strcmp(sim_reaction_id_str(SIM_REACT_BLACK_POWDER), "r-black-powder") == 0);
+    CHECK(std::strcmp(sim_reaction_id_str(SIM_REACT_SULFUR_TOXIC_SMOKE), "r-sulfur-toxic-smoke") == 0);
+    CHECK(std::strcmp(sim_reaction_id_str(SIM_REACT_BAMBOO_BURN), "r-bamboo-burn") == 0);
+    CHECK(std::strcmp(sim_reaction_id_str(SIM_REACT_LIME_STEAM), "r-lime-steam") == 0);
+    CHECK(std::strcmp(sim_reaction_id_str(SIM_REACT_RICE_PURIFY), "r-rice-purify") == 0);
+
+    // 6a) priority 10 vs 1：硝+硫+煤混合受热 >=120° 必须触发黑火药爆炸（而非只冒毒烟）
+    {
+        sim_world* w = make_world(128, 128, 101ULL, mp);
+        CHECK(w != nullptr);
+        for (int32_t y = 50; y < 74; ++y) {
+            for (int32_t x = 50; x < 74; ++x) sim_world_set_cell(w, x, y, SIM_MAT_ROCK);
+        }
+        // 中央 6x6 混放硝石/硫磺/煤
+        for (int32_t y = 60; y < 66; ++y) {
+            for (int32_t x = 60; x < 66; ++x) {
+                uint16_t m = SIM_MAT_SALTPETER;
+                if ((x + y) % 3 == 1) m = SIM_MAT_SULFUR;
+                else if ((x + y) % 3 == 2) m = SIM_MAT_COAL;
+                sim_world_set_cell(w, x, y, m);
+            }
+        }
+        const uint64_t rock_before = count_material(w, 128, 128, SIM_MAT_ROCK);
+        CHECK(sim_world_apply_heat_burst(w, 62, 62, 4, 200.0f) > 0);
+        sim_event ev[128];
+        const uint32_t n = sim_world_poll_events(w, ev, 128);
+        bool saw_bp = false;
+        for (uint32_t i = 0; i < n; ++i) {
+            if (ev[i].type == SIM_EVENT_REACTION && ev[i].aux == SIM_REACT_BLACK_POWDER) {
+                saw_bp = true;
+            }
+        }
+        CHECK(saw_bp);
+        CHECK(count_material(w, 128, 128, SIM_MAT_ROCK) < rock_before);
+        CHECK(count_material(w, 128, 128, SIM_MAT_SALTPETER) == 0);
+        sim_world_destroy(w);
+    }
+
+    // 6b) 纯硫受热 100°（80 <= T < 250）：产生 toxic_smoke 且不消耗硫磺（consumes: []）
+    {
+        sim_world* w = make_world(64, 64, 102ULL, mp);
+        CHECK(w != nullptr);
+        for (int32_t x = 20; x < 44; ++x) sim_world_set_cell(w, x, 40, SIM_MAT_ROCK);
+        for (int32_t x = 24; x < 40; ++x) sim_world_set_cell(w, x, 39, SIM_MAT_SULFUR);
+        const uint64_t sulfur_before = count_material(w, 64, 64, SIM_MAT_SULFUR);
+        CHECK(sim_world_apply_heat_burst(w, 32, 39, 6, 100.0f) > 0);
+        CHECK(count_material(w, 64, 64, SIM_MAT_SULFUR) == sulfur_before);
+        CHECK(count_material(w, 64, 64, SIM_MAT_TOXIC_SMOKE) > 0);
+        sim_event ev[128];
+        const uint32_t n = sim_world_poll_events(w, ev, 128);
+        bool saw_ts = false;
+        for (uint32_t i = 0; i < n; ++i) {
+            if (ev[i].type == SIM_EVENT_REACTION && ev[i].aux == SIM_REACT_SULFUR_TOXIC_SMOKE) {
+                saw_ts = true;
+            }
+        }
+        CHECK(saw_ts);
+        sim_world_destroy(w);
+    }
+
+    // 6c) r-bamboo-burn：竹木点燃后持续燃烧并蔓延，燃尽产生煤（coal）
+    {
+        sim_world* w = make_world(64, 64, 103ULL, mp);
+        CHECK(w != nullptr);
+        for (int32_t x = 16; x < 48; ++x) sim_world_set_cell(w, x, 48, SIM_MAT_ROCK);
+        for (int32_t y = 36; y < 48; ++y) {
+            for (int32_t x = 28; x < 36; ++x) sim_world_set_cell(w, x, y, SIM_MAT_BAMBOO);
+        }
+        const uint64_t bamboo_before = count_material(w, 64, 64, SIM_MAT_BAMBOO);
+        CHECK(sim_world_apply_heat_burst(w, 32, 42, 3, 400.0f) > 0);
+        bool saw_bamboo_react = false;
+        sim_event ev[128];
+        for (int t = 0; t < 200; ++t) {
+            sim_world_step(w);
+            const uint32_t n = sim_world_poll_events(w, ev, 128);
+            for (uint32_t i = 0; i < n; ++i) {
+                if (ev[i].type == SIM_EVENT_REACTION && ev[i].aux == SIM_REACT_BAMBOO_BURN) {
+                    saw_bamboo_react = true;
+                }
+            }
+        }
+        CHECK(saw_bamboo_react);
+        CHECK(count_material(w, 64, 64, SIM_MAT_BAMBOO) < bamboo_before);
+        CHECK(count_material(w, 64, 64, SIM_MAT_COAL) > 0);
+        sim_world_destroy(w);
+    }
+
+    // 6d) r-lime-steam：石灰 + 水 -> 蒸汽（全消耗）；蒸汽消散部分凝结回水
+    {
+        sim_world* w = make_world(64, 64, 104ULL, mp);
+        CHECK(w != nullptr);
+        for (int32_t x = 19; x <= 44; ++x) sim_world_set_cell(w, x, 50, SIM_MAT_ROCK);
+        sim_world_set_cell(w, 19, 49, SIM_MAT_ROCK);
+        sim_world_set_cell(w, 44, 49, SIM_MAT_ROCK);
+        for (int32_t x = 20; x < 44; ++x) {
+            sim_world_set_cell(w, x, 49, SIM_MAT_WATER);
+            sim_world_set_cell(w, x, 48, SIM_MAT_LIME);
+        }
+        sim_world_step(w);
+        CHECK(count_material(w, 64, 64, SIM_MAT_STEAM) > 0);
+        CHECK(count_material(w, 64, 64, SIM_MAT_LIME) == 0);
+        sim_event ev[128];
+        const uint32_t n = sim_world_poll_events(w, ev, 128);
+        bool saw_lime = false;
+        for (uint32_t i = 0; i < n; ++i) {
+            if (ev[i].type == SIM_EVENT_REACTION && ev[i].aux == SIM_REACT_LIME_STEAM) saw_lime = true;
+        }
+        CHECK(saw_lime);
+        // 跑 200 tick 验证蒸汽可部分凝结回水
+        for (int t = 0; t < 200; ++t) sim_world_step(w);
+        CHECK(count_material(w, 64, 64, SIM_MAT_WATER) > 0);
+        sim_world_destroy(w);
+    }
+
+    // 6e) r-rice-purify：糯米接触阴气清除阴气，糯米本身不被消耗
+    {
+        sim_world* w = make_world(64, 64, 105ULL, mp);
+        CHECK(w != nullptr);
+        for (int32_t x = 16; x < 48; ++x) sim_world_set_cell(w, x, 40, SIM_MAT_ROCK);
+        for (int32_t x = 24; x < 40; ++x) {
+            sim_world_set_cell(w, x, 39, SIM_MAT_GLUTINOUS_RICE);
+            sim_world_set_cell(w, x, 38, SIM_MAT_YIN_QI);
+        }
+        const uint64_t rice_before = count_material(w, 64, 64, SIM_MAT_GLUTINOUS_RICE);
+        for (int t = 0; t < 10; ++t) sim_world_step(w);
+        CHECK(count_material(w, 64, 64, SIM_MAT_GLUTINOUS_RICE) == rice_before);
+        CHECK(count_material(w, 64, 64, SIM_MAT_YIN_QI) == 0);
+        sim_event ev[128];
+        const uint32_t n = sim_world_poll_events(w, ev, 128);
+        bool saw_purify = false;
+        for (uint32_t i = 0; i < n; ++i) {
+            if (ev[i].type == SIM_EVENT_REACTION && ev[i].aux == SIM_REACT_RICE_PURIFY) {
+                saw_purify = true;
+            }
+        }
+        CHECK(saw_purify);
+        sim_world_destroy(w);
+    }
+
+    // 6f) 水灭火产生蒸汽
+    {
+        sim_world* w = make_world(64, 64, 106ULL, mp);
+        CHECK(w != nullptr);
+        for (int32_t x = 15; x <= 48; ++x) sim_world_set_cell(w, x, 42, SIM_MAT_ROCK);
+        sim_world_set_cell(w, 15, 41, SIM_MAT_ROCK);
+        sim_world_set_cell(w, 48, 41, SIM_MAT_ROCK);
+        for (int32_t x = 16; x < 48; ++x) {
+            sim_world_set_cell(w, x, 41, SIM_MAT_WATER);
+            sim_world_set_cell(w, x, 40, SIM_MAT_FIRE);
+        }
+        sim_world_step(w);
+        CHECK(count_material(w, 64, 64, SIM_MAT_FIRE) == 0);
+        CHECK(count_material(w, 64, 64, SIM_MAT_STEAM) > 0);
+        sim_world_destroy(w);
+    }
     return true;
 }
 
@@ -400,6 +574,7 @@ int main(int argc, char** argv) {
         {"conservation", test_conservation_and_bounds},
         {"api", test_api_contract},
         {"materials", test_materials_json},
+        {"reactions", test_reactions_and_heat},
     };
     int failed = 0;
     int ran = 0;

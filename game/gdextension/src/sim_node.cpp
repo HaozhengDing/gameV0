@@ -1,5 +1,7 @@
 #include "sim_node.h"
 
+#include <vector>
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/variant/char_string.hpp>
@@ -21,8 +23,18 @@ void SimWorldNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_cell", "x", "y", "material"), &SimWorldNode::set_cell);
     ClassDB::bind_method(D_METHOD("set_cell_by_name", "x", "y", "material"), &SimWorldNode::set_cell_by_name);
     ClassDB::bind_method(D_METHOD("get_cell", "x", "y"), &SimWorldNode::get_cell);
+    ClassDB::bind_method(D_METHOD("get_cell_aux", "x", "y"), &SimWorldNode::get_cell_aux);
     ClassDB::bind_method(D_METHOD("material_id", "name"), &SimWorldNode::material_id);
     ClassDB::bind_method(D_METHOD("dig", "x", "y", "radius"), &SimWorldNode::dig);
+
+    ClassDB::bind_method(D_METHOD("apply_heat_burst", "x", "y", "radius", "heat_temp"),
+                         &SimWorldNode::apply_heat_burst, DEFVAL(400.0f));
+    ClassDB::bind_method(D_METHOD("poll_events", "max_count"),
+                         &SimWorldNode::poll_events, DEFVAL(256));
+    ClassDB::bind_method(D_METHOD("reaction_id_str", "reaction_id"), &SimWorldNode::reaction_id_str);
+    ClassDB::bind_method(D_METHOD("get_material_ignition_temp", "material"),
+                         &SimWorldNode::get_material_ignition_temp);
+    ClassDB::bind_method(D_METHOD("get_sim_version"), &SimWorldNode::get_sim_version);
 
     ClassDB::bind_method(D_METHOD("render_image"), &SimWorldNode::render_image);
     ClassDB::bind_method(D_METHOD("update_texture"), &SimWorldNode::update_texture);
@@ -145,6 +157,13 @@ int32_t SimWorldNode::get_cell(int32_t p_x, int32_t p_y) const {
     return static_cast<int32_t>(sim_world_get_cell(world_, p_x, p_y).material);
 }
 
+int32_t SimWorldNode::get_cell_aux(int32_t p_x, int32_t p_y) const {
+    if (world_ == nullptr) {
+        return 0;
+    }
+    return static_cast<int32_t>(sim_world_get_cell(world_, p_x, p_y).aux);
+}
+
 int32_t SimWorldNode::material_id(const String &p_name) const {
     if (world_ == nullptr) {
         return -1;
@@ -159,6 +178,56 @@ int32_t SimWorldNode::dig(int32_t p_x, int32_t p_y, int32_t p_radius) {
         return 0;
     }
     return static_cast<int32_t>(sim_world_dig(world_, p_x, p_y, static_cast<uint32_t>(p_radius)));
+}
+
+int32_t SimWorldNode::apply_heat_burst(int32_t p_x, int32_t p_y, int32_t p_radius, float p_heat_temp) {
+    ERR_FAIL_NULL_V(world_, 0);
+    if (p_radius < 0) {
+        return 0;
+    }
+    return static_cast<int32_t>(
+        sim_world_apply_heat_burst(world_, p_x, p_y, static_cast<uint32_t>(p_radius), p_heat_temp));
+}
+
+Array SimWorldNode::poll_events(int32_t p_max_count) {
+    Array result;
+    if (world_ == nullptr || p_max_count <= 0) {
+        return result;
+    }
+    const uint32_t cap = p_max_count > 1024 ? 1024u : static_cast<uint32_t>(p_max_count);
+    std::vector<sim_event> buf(cap);
+    const uint32_t count = sim_world_poll_events(world_, buf.data(), cap);
+    for (uint32_t i = 0; i < count; ++i) {
+        const sim_event &ev = buf[i];
+        Dictionary d;
+        d["type"] = static_cast<int32_t>(ev.type);
+        d["material"] = static_cast<int32_t>(ev.material);
+        d["x"] = ev.x;
+        d["y"] = ev.y;
+        d["aux"] = static_cast<int32_t>(ev.aux);
+        if (ev.type == SIM_EVENT_REACTION) {
+            d["reaction_id"] = String::utf8(sim_reaction_id_str(ev.aux));
+        } else {
+            d["reaction_id"] = String();
+        }
+        result.append(d);
+    }
+    return result;
+}
+
+String SimWorldNode::reaction_id_str(int32_t p_reaction_id) const {
+    return String::utf8(sim_reaction_id_str(static_cast<uint8_t>(p_reaction_id)));
+}
+
+float SimWorldNode::get_material_ignition_temp(int32_t p_material) const {
+    if (world_ == nullptr || p_material < 0) {
+        return 0.0f;
+    }
+    return sim_world_material_ignition_temp(world_, static_cast<uint16_t>(p_material));
+}
+
+String SimWorldNode::get_sim_version() const {
+    return String::utf8(sim_version());
 }
 
 Ref<Image> SimWorldNode::render_image() const {

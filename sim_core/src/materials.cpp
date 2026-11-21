@@ -68,7 +68,17 @@ void collect_fields(const json::Value& node, const std::map<std::string, const j
     }
 }
 
-// 用 JSON 字段覆盖一个 MatDef（只取 sim_core 实际使用的字段）。
+uint16_t parse_product(const std::string& s, uint16_t fallback) {
+    if (s == "coal") return SIM_MAT_COAL;
+    if (s == "smoke") return SIM_MAT_SMOKE;
+    if (s == "toxic_smoke") return SIM_MAT_TOXIC_SMOKE;
+    if (s == "steam") return SIM_MAT_STEAM;
+    if (s == "water") return SIM_MAT_WATER;
+    if (s == "empty") return SIM_MAT_EMPTY;
+    return fallback;
+}
+
+// 用 JSON 字段覆盖一个 MatDef（C-SIM v3：额外消费 temperature / ignition_temperature / burn_time / burn_product）。
 void apply_fields(const std::map<std::string, const json::Value*>& f, MatDef* d) {
     auto get = [&f](const char* key) -> const json::Value* {
         auto it = f.find(key);
@@ -80,6 +90,17 @@ void apply_fields(const std::map<std::string, const json::Value*>& f, MatDef* d)
     if (const json::Value* v = get("flammable"); v && v->is_bool()) d->flammable = v->boolean ? 1 : 0;
     if (const json::Value* v = get("name"); v && v->is_string()) d->display = v->str;
     if (const json::Value* v = get("id"); v && v->is_string()) d->id_str = v->str;
+    if (const json::Value* v = get("temperature"); v && v->is_number()) d->temperature = static_cast<float>(v->number);
+    if (const json::Value* v = get("ignition_temperature"); v && v->is_number()) {
+        d->ignition_temp = static_cast<float>(v->number);
+    }
+    if (const json::Value* v = get("burn_time"); v && v->is_number() && v->number > 0.0) {
+        const int bt = static_cast<int>(v->number);
+        d->burn_time = static_cast<uint16_t>(bt > 255 ? 255 : bt);
+    }
+    if (const json::Value* v = get("burn_product"); v && v->is_string()) {
+        d->burn_product = parse_product(v->str, d->burn_product);
+    }
 }
 
 // 把 JSON 材质数组按 id 索引。
@@ -135,8 +156,12 @@ void MaterialTable::init_builtin() {
     add(&defs_, SIM_MAT_GLUTINOUS_RICE, "glutinous_rice", "糯米", SIM_STATE_POWDER, 0.8f, 0xF2EAD8, false, false);
     add(&defs_, SIM_MAT_BAMBOO, "bamboo", "竹木", SIM_STATE_STATIC, 0.7f, 0x8FA05A, true, false);
     add(&defs_, SIM_MAT_YIN_QI, "yin_qi", "阴气", SIM_STATE_GAS, 0.1f, 0x3A4A5A, false, false);
+    // C-SIM v3（M1-12）：热/火与反应表二级气体材质（引擎内建，不占 data/materials.json 主表）。
+    add(&defs_, SIM_MAT_SMOKE, "smoke", "烟", SIM_STATE_GAS, 0.15f, 0x4A4D52, false, true);
+    add(&defs_, SIM_MAT_TOXIC_SMOKE, "toxic_smoke", "毒烟", SIM_STATE_GAS, 0.18f, 0x9AB834, false, true);
+    add(&defs_, SIM_MAT_STEAM, "steam", "蒸汽", SIM_STATE_GAS, 0.12f, 0xD6E4EE, false, true);
 
-    // 运动参数（sim 内部，不暴露）。
+    // 运动与燃烧参数（sim 内部默认值，可被 data/materials.json 覆盖）。
     defs_[SIM_MAT_SAND].spread = 1;
     defs_[SIM_MAT_WATER].spread = 3;
     defs_[SIM_MAT_OIL].spread = 3;
@@ -144,7 +169,24 @@ void MaterialTable::init_builtin() {
     defs_[SIM_MAT_BLACK_DOG_BLOOD].spread = 3;
     defs_[SIM_MAT_FIRE].fire_life_min = 40;
     defs_[SIM_MAT_FIRE].fire_life_max = 110;
+    defs_[SIM_MAT_SMOKE].fire_life_min = 90;
+    defs_[SIM_MAT_SMOKE].fire_life_max = 180;
+    defs_[SIM_MAT_TOXIC_SMOKE].fire_life_min = 180;
+    defs_[SIM_MAT_TOXIC_SMOKE].fire_life_max = 250;
+    defs_[SIM_MAT_STEAM].fire_life_min = 80;
+    defs_[SIM_MAT_STEAM].fire_life_max = 160;
     defs_[SIM_MAT_OIL].ignite_chance = 0.05f;
+    defs_[SIM_MAT_OIL].ignition_temp = 150.0f;
+    defs_[SIM_MAT_COAL].ignition_temp = 300.0f;
+    defs_[SIM_MAT_COAL].burn_time = 180;
+    defs_[SIM_MAT_COAL].burn_product = SIM_MAT_SMOKE;
+    defs_[SIM_MAT_SULFUR].ignition_temp = 250.0f;
+    defs_[SIM_MAT_SULFUR].burn_time = 90;
+    defs_[SIM_MAT_SULFUR].burn_product = SIM_MAT_TOXIC_SMOKE;
+    defs_[SIM_MAT_BAMBOO].ignition_temp = 200.0f;
+    defs_[SIM_MAT_BAMBOO].burn_time = 120;
+    defs_[SIM_MAT_BAMBOO].burn_product = SIM_MAT_COAL;
+    defs_[SIM_MAT_YIN_QI].temperature = 10.0f;
 }
 
 bool MaterialTable::load(const char* json_path) {

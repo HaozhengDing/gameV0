@@ -28,6 +28,9 @@ const COL_SLOT_BG := Color(0.08, 0.08, 0.12, 0.72)
 const COL_SLOT_SEL := Color(0.20, 0.18, 0.12, 0.88)
 const COL_BORDER_SEL := Color(0.96, 0.84, 0.36)
 const COL_BORDER_DIM := Color(0.30, 0.30, 0.36, 0.80)
+const COL_ST_BURN := Color(0.92, 0.34, 0.14, 0.90)
+const COL_ST_WET := Color(0.24, 0.56, 0.92, 0.90)
+const COL_ST_POISON := Color(0.56, 0.72, 0.24, 0.90)
 
 const HELP_TEXT := "A/D 走 | W/Space 浮空 | 1-4 切符 | 左键 施法 | E 吸 | Q 喷 | Tab 水/油 | F 点火 | R 重开"
 
@@ -45,11 +48,13 @@ var _oil_border: ColorRect
 var _oil_fill: ColorRect
 var _oil_label: Label
 
-# 顶中符槽
+# 顶中符槽与实体状态条
 var _slot_borders: Array[ColorRect] = []
 var _slot_bgs: Array[ColorRect] = []
 var _slot_titles: Array[Label] = []
 var _slot_costs: Array[Label] = []
+var _status_bgs: Array[ColorRect] = []
+var _status_labels: Array[Label] = []
 
 # 右上材质与出口
 var _info_bg: ColorRect
@@ -132,6 +137,17 @@ func _build_slots() -> void:
 		_slot_bgs.append(bg)
 		_slot_titles.append(title)
 		_slot_costs.append(cost)
+	# 状态徽章槽（最多同时显示 3 个：燃 / 湿 / 毒，空闲时隐藏）
+	_status_bgs.clear()
+	_status_labels.clear()
+	for j in range(3):
+		var bx := x0 + float(j) * 74.0
+		var sbg := _make_rect(Vector2(bx, 82), Vector2(66, 28), COL_ST_BURN)
+		sbg.visible = false
+		var slbl := _make_label(Vector2(bx + 8, 83), 18, Color(0.98, 0.98, 0.96))
+		slbl.visible = false
+		_status_bgs.append(sbg)
+		_status_labels.append(slbl)
 
 func _build_right_info(vs: Vector2) -> void:
 	var w := 250.0
@@ -243,6 +259,31 @@ func update_state(state: Dictionary) -> void:
 		_mat_label.text = String(state.get("cursor_mat", "—"))
 	if _exit_label != null:
 		_exit_label.text = String(state.get("exit_hint", ""))
+
+	var statuses: Array = state.get("statuses", [])
+	for j in range(_status_bgs.size()):
+		if j < statuses.size() and statuses[j] is Dictionary:
+			var sd: Dictionary = statuses[j]
+			var kind: String = String(sd.get("id", ""))
+			var label_text: String = String(sd.get("label", kind))
+			_status_bgs[j].color = _status_color(kind)
+			_status_bgs[j].visible = true
+			_status_labels[j].text = label_text
+			_status_labels[j].visible = true
+		else:
+			_status_bgs[j].visible = false
+			_status_labels[j].visible = false
+
+func _status_color(kind: String) -> Color:
+	match kind:
+		"burning":
+			return COL_ST_BURN
+		"wet":
+			return COL_ST_WET
+		"poison":
+			return COL_ST_POISON
+		_:
+			return PANEL_BG
 
 func log_event(text: String) -> void:
 	_lines.push_front(text)
