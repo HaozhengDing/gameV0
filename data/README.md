@@ -11,9 +11,11 @@
 ```text
 data/
   README.md                         # 本文件
-  magic_numbers.json                # 全局调参
-  materials.json                    # 12 种物质 + 8 条反应
+  magic_numbers.json                # 全局调参（含 fire_heat / sanity / economy）
+  materials.json                    # 12 种物质 + 8 条反应（含 burn_time / burn_product）
   talismans.json                    # 正式符卡表（C-VM 输入，T4b 新增）
+  texts/
+    zh-CN.json                      # C-TEXT v0.1 文本键词表（M1-01 冻结）
   biomes/
     level-01-coalmine.json          # 第 1 层：矿井
   rooms/
@@ -40,7 +42,7 @@ data/
 - `consumes`（字符串数组，可选）：本反应实际消耗的物质 id；**缺省时等于 `inputs`**。未列入 `consumes` 的输入只作为条件参与匹配，反应后保留。
 
 - `trigger.type`：`contact` / `heat`（带 `min_temperature`）
-- `temperature` / `ignition_temperature`：2026-11-17 前**未被引擎读取**（sim_core 目前只用 `state/density/color/flammable`）；M1 热/火系统（C-SIM v3）会消费这两个字段，设计见 `docs/tech/sim-fire-heat-design.md`。
+- `temperature` / `ignition_temperature` / `burn_time` / `burn_product`：2026-11-20 D-M1-3 拍板补齐可燃材质占位 `burn_time`（tick，60Hz）与 `burn_product`（`coal` 或 C-SIM v3 二级气体 `smoke`/`toxic_smoke`/`steam`）；M1-12（C-SIM v3）消费这些字段，设计见 `docs/tech/sim-fire-heat-design.md`。
 - `result.type`：`explosion` / `heat_cloud` / `purify` / `damage` / `barrier` / `temporary_talisman_slot` / `toxic_smoke` / `burn`
 - `target_tags` 用于实体/物品标签（如 `spirit`、`eldritch`、`paper`），不是物质 id。
 
@@ -55,6 +57,13 @@ v0：12 种物质、8 条反应；与 P0 系统卡 S-0003 对齐。偏离项写�
 - 与 `tests/vm_cases/cards.yaml`（T1 测试替身）的重叠卡：`tools/validate_data.py` 会交叉校验 spirit_cost / forbidden / element / damage 等字段，防止正式数据与契约用例漂移。
 - 与 P0 卡面：`tools/validate_data.py` 还会核对 `groups[].spirit_cost` 与 `refs/cards/p0/talismans.yaml` 的 `numbers.spirit_cost`。
 - 数值来源与偏差：见文件内 `v1_deviations`（归 的 cost 0 例外、数据缺口）。
+
+## 4c. texts/*.json 文本键词表（C-TEXT v0.1，M1-01 冻结）
+
+- 用途：所有玩家可见文本的唯一词源（契约见 `docs/tech/m1-01-contracts-evt-text.md` Part 2），支持本地化、版号词表替换与 D3 认知污染控制。
+- 键格式：`$<domain>_<snake_id>`（与 `materials.json` 的 `ui_key` 一致）。
+- `corruptible` 硬约束：`$mat_` / `$card_` / `$react_` / `$status_` / `$ui_` / `$enemy_` 强制 `false`（已学信息永不乱码）；`$rule_` / `$lore_` / `$item_unid_` 允许 `true` 且必须提供非空 `corrupted` 变体。
+- 由 `tools/validate_data.py`（`validate_texts()`）自动校验格式、D3 约束及与 `materials.json` / `talismans.json` 的交叉引用。
 
 ## 5. magic_numbers.json
 

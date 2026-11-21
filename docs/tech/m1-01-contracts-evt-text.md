@@ -1,6 +1,7 @@
-# M1-01 契约草案：C-EVT（世界事件）与 C-TEXT（文本键）v0.1
+# M1-01 契约：C-EVT（世界事件）与 C-TEXT（文本键）v0.1
 
-> **状态：草案 v0.1（待用户审定后冻结）**｜制定：2026-11-20｜下游：M1 全部任务（M1-02 ~ M1-12）
+> **状态：v0.1 已冻结（2026-11-20）**｜制定与冻结：2026-11-20｜下游：M1 全部任务（M1-02 ~ M1-12）
+> **实现落地**：词表 `data/texts/zh-CN.json`、校验 `tools/validate_data.py`（`validate_texts()`）、Godot 运行时 `game/scripts/event_bus.gd` & `game/scripts/text_db.gd`。
 > **依据**：`docs/01-decision-twist.md`（D1 可读性、D2 规矩、D3 污染边界）、`docs/03-roadmap.md` §3.3、`refs/naming.md` §5（克制单字/去中二原则）、`data/materials.json`（已有 `$mat_*` 键）。
 > **修改规矩**：冻结后破坏性变更须版本号 +1、写 log 列出受影响下游，并同步更新 `tools/validate_data.py`。
 

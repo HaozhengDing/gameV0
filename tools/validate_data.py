@@ -9,6 +9,7 @@
 退出码：0 全过；1 有错误；2 缺依赖。
 """
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,9 @@ RESULT_TYPES = {
     "temporary_talisman_slot", "toxic_smoke", "burn",
 }
 CARD_TYPES = {"character", "work", "system", "talisman", "fate", "location", "event"}
+SECONDARY_BURN_PRODUCTS = {"smoke", "toxic_smoke", "steam"}
+TEXT_KEY_RE = re.compile(r"^\$[a-z]+_[a-z0-9_]+$")
+NON_CORRUPTIBLE_PREFIXES = ("$mat_", "$card_", "$react_", "$status_", "$ui_", "$enemy_")
 
 
 def err(msg):
@@ -130,6 +134,14 @@ def validate_materials():
             err(f"materials.{mid}: density 必须是数字")
         if not isinstance(m.get("tags", []), list):
             err(f"materials.{mid}: tags 必须是数组")
+        if "burn_time" in m:
+            bt = m["burn_time"]
+            if not isinstance(bt, int) or isinstance(bt, bool) or bt <= 0:
+                err(f"materials.{mid}: burn_time 必须是正整数")
+        if "burn_product" in m:
+            bp = m["burn_product"]
+            if not isinstance(bp, str) or (bp not in idset and bp not in SECONDARY_BURN_PRODUCTS):
+                err(f"materials.{mid}: burn_product 引用了未定义物质 {bp!r}")
 
     if not isinstance(reactions, list):
         err("data/materials.json: reactions 必须是数组")
@@ -177,6 +189,9 @@ def validate_magic_numbers():
         "sanity.thresholds": dict,
         "sanity.possession": dict,
         "sanity.forbidden_backlash": str,
+        "fire_heat": dict,
+        "fire_heat.fire_source_heat": (int, float),
+        "fire_heat.burning_dps_max_hp_ratio": (int, float),
         "economy.silver_base": (int, float),
         "economy.silver_per_level": (int, float),
         "economy.yin_money_per_silver": (int, float),
@@ -561,6 +576,63 @@ def validate_talismans(material_ids):
         pass
 
     print(f"talismans: {len(by_id)} 卡 | {len(groups)} 组")
+    return set(by_id.keys())
+
+
+def validate_texts(material_by_id, reaction_ids, talisman_ids):
+    """校验 C-TEXT v0.1 词表（data/texts/zh-CN.json）：键格式、D3 corruptible 硬约束、与 data 交叉引用。"""
+    rel = "data/texts/zh-CN.json"
+    p = ROOT / rel
+    if not p.exists():
+        err(f"{rel}: 文件不存在（C-TEXT v0.1 必填）")
+        return
+    data = load_json(rel)
+    if data is None:
+        return
+    for field in ("schema", "version", "locale"):
+        if not data.get(field):
+            err(f"{rel}: 缺少 {field}")
+    entries = data.get("entries")
+    if not isinstance(entries, dict) or not entries:
+        err(f"{rel}: entries 必须是非空对象")
+        return
+
+    for key, item in entries.items():
+        if not isinstance(key, str) or not TEXT_KEY_RE.match(key):
+            err(f"{rel}: 非法文本键格式 {key!r}")
+            continue
+        if not isinstance(item, dict):
+            err(f"{rel}: {key} 必须是对象")
+            continue
+        text = item.get("text")
+        if not isinstance(text, str) or not text.strip():
+            err(f"{rel}: {key} 缺少非空 text")
+        corruptible = item.get("corruptible")
+        if not isinstance(corruptible, bool):
+            err(f"{rel}: {key} 缺少 bool 类型 corruptible")
+            continue
+        if any(key.startswith(pref) for pref in NON_CORRUPTIBLE_PREFIXES) and corruptible:
+            err(f"{rel}: {key} 违反 D3 红线（已知/规则域 corruptible 必须为 false）")
+        if corruptible:
+            corrupted = item.get("corrupted")
+            if not isinstance(corrupted, str) or not corrupted.strip():
+                err(f"{rel}: {key} corruptible=true 时必须提供非空 corrupted 文本")
+
+    # 交叉校验：materials.ui_key / reactions / talismans
+    for mid, m in material_by_id.items():
+        uk = m.get("ui_key")
+        if isinstance(uk, str) and uk and uk not in entries:
+            err(f"{rel}: 缺少物质 {mid} 的 ui_key {uk}")
+    for rid in reaction_ids:
+        rk = "$react_" + rid.removeprefix("r-").replace("-", "_")
+        if rk not in entries:
+            err(f"{rel}: 缺少反应 {rid} 的文本键 {rk}")
+    for cid in talisman_ids:
+        ck = "$card_" + cid.replace("-", "_")
+        if ck not in entries:
+            err(f"{rel}: 缺少符卡 {cid} 的文本键 {ck}")
+
+    print(f"texts: {len(entries)} 条（C-TEXT v0.1）")
 
 
 def validate_vm_cases():
@@ -591,7 +663,8 @@ def main():
     room_map = load_rooms(material_ids, material_by_id)
     validate_biomes(room_map, material_by_id, material_ids, reaction_ids)
     validate_cards()
-    validate_talismans(material_ids)
+    talisman_ids = validate_talismans(material_ids) or set()
+    validate_texts(material_by_id, reaction_ids, talisman_ids)
     validate_vm_cases()
 
     print(f"materials: {len(material_ids)} | reactions: {len(reaction_ids)} | rooms: {len(room_map)}")

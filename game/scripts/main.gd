@@ -24,6 +24,8 @@ const PlayerScript := preload("res://scripts/player.gd")
 const ExecutorScript := preload("res://scripts/executor.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const OverlayScript := preload("res://scripts/overlay.gd")
+const EventBusScript := preload("res://scripts/event_bus.gd")
+const TextDBScript := preload("res://scripts/text_db.gd")
 
 # 场景节点
 var sim: SimWorldNode
@@ -34,6 +36,8 @@ var camera: Camera2D
 var hud
 var executor
 var overlay
+var event_bus
+var text_db
 var exit_marker: ColorRect
 
 # 玩法状态
@@ -80,6 +84,7 @@ func _setup() -> void:
 	_create_level()
 	_create_player()
 	_create_overlay()
+	_create_contracts()
 	_create_vm()
 	_create_hud()
 	hud.set_slots(group_names, group_costs)
@@ -249,6 +254,12 @@ func _create_overlay() -> void:
 	overlay.z_index = 5
 	overlay.show_reticle = DisplayServer.get_name() != HEADLESS_NAME
 	add_child(overlay)
+
+func _create_contracts() -> void:
+	event_bus = EventBusScript.new()
+	text_db = TextDBScript.new()
+	if not text_db.load_locale():
+		push_error("T4B: C-TEXT 词表加载失败")
 
 func _create_vm() -> void:
 	vm = TalismanVMNode.new()
@@ -677,6 +688,30 @@ func _run_smoke() -> void:
 					print("T4B_SMOKE_STEP 角色物理 fall=%.1f->%.1f hover->%.1f lev=%.0f->%.0f" % [
 						y0, y_fall, y_hover, lev_after, player.levitate
 					])
+
+	# 8) M1-01 契约自检：C-TEXT（正常/低神智 D3 边界/拼句）+ C-EVT（发布与订阅）
+	if fail == "":
+		if text_db == null or not text_db.is_loaded():
+			fail = "C-TEXT 未加载"
+		elif text_db.get_text("$mat_water", 10) != "水":
+			fail = "C-TEXT 违反 D3：低神智时 $mat_water 发生腐坏"
+		elif text_db.get_text("$rule_no_open_flame", 100) == text_db.get_text("$rule_no_open_flame", 50):
+			fail = "C-TEXT 未知规矩在 sanity<66 时未切换腐坏文本"
+		elif text_db.compose_cards(["body-flying-sword", "foot-sha"]) != "斩 + 爆":
+			fail = "C-TEXT 拼句结果不符：%s" % text_db.compose_cards(["body-flying-sword", "foot-sha"])
+		else:
+			var got_evts := []
+			var cb := func(e: Dictionary) -> void: got_evts.append(e)
+			event_bus.reset()
+			event_bus.subscribe(cb)
+			var pub: Dictionary = event_bus.publish("reaction_triggered", sim.get_tick(), {
+				"pos": Vector2i(10, 10), "reaction_id": "r-black-powder", "value": 25.0, "text_key": "$react_black_powder"
+			})
+			event_bus.unsubscribe(cb)
+			if pub.is_empty() or got_evts.size() != 1 or event_bus.count_of("reaction_triggered") != 1:
+				fail = "C-EVT 发布/订阅自检失败"
+			else:
+				print("T4B_SMOKE_STEP M1-01契约 texts=%d evt_seq=%d" % [text_db.entry_count(), event_bus.get_seq()])
 
 	if fail != "":
 		push_error("T4B_SMOKE_FAIL: " + fail)

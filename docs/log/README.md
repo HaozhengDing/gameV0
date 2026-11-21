@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-20 | [2026-11-20-07-m1-plan-final-and-m1-01-frozen.md](2026-11-20-07-m1-plan-final-and-m1-01-frozen.md) | 决策 + 更新 | 详细 | M1 计划 5 项全拍板生效（含完整 Wang Tile）；M1-01（C-EVT/C-TEXT v0.1）冻结并落地词表、CI 机检与运行时骨架 |
 | 2026-11-20 | [2026-11-20-06-m1-plan-and-contracts-draft.md](2026-11-20-06-m1-plan-and-contracts-draft.md) | 决策 + 建议 | 详细 | M0 conditional 放行：起草 M1 计划（04-m1-plan）与 M1-01 契约（C-EVT / C-TEXT v0.1 草案） |
 | 2026-11-20 | [2026-11-20-05-m0-c-prerun-and-ledger.md](2026-11-20-05-m0-c-prerun-and-ledger.md) | 更新 + 评审 | 详细 | M0 收尾：完成实验 C 7 场景 AI 预演报告骨架（抓出原生水旁路等 4 隐患）与 M0 一页纸评审账本 |
 | 2026-11-20 | [2026-11-20-04-t4b-physics-and-naming.md](2026-11-20-04-t4b-physics-and-naming.md) | 更新 | 详细 | T4b 落地 Noita 式重力/迈步/浮空物理移动、彩色条极简 HUD，并同步道教符语保留+克制单字命名规范 |

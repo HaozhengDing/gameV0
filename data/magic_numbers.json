@@ -1,7 +1,7 @@
 {
   "schema": "gamev0.magic_numbers/v0.1",
   "version": "0.1",
-  "updated": "2026-11-15",
+  "updated": "2026-11-20",
   "description": "全局调参（对齐 P0 卡片与《刍狗》设计文档 3.x）；数值为 v0 占位。",
   "design": {
     "prototype_layers": 1,
@@ -54,13 +54,24 @@
       "phantom_kill_sanity": 10,
       "phantom_drop": "yan_jin",
       "yin_enemies_neutral": true,
+      "lose_control_enabled": false,
       "lose_control_interval_sec": 30,
       "lose_control_duration_sec": 1,
       "lose_control_warning_sec": 2,
+      "yan_jin_enabled": false,
       "forbidden_cost_lanterns": 0.5,
       "scar_max_sanity_per_entry": 10,
       "scar_max_sanity_cap": 30
     }
+  },
+  "fire_heat": {
+    "fire_source_heat": 400,
+    "ignite_base_rate": 0.02,
+    "ignite_temp_scale": 200,
+    "burning_dps_max_hp_ratio": 0.02,
+    "burning_duration_sec": 5,
+    "wet_duration_sec": 5,
+    "steam_condense_chance": 0.25
   },
   "elements": {
     "in_damage_formula": false
@@ -209,6 +220,8 @@
     "economy：法器价由设计原文 250 × 1.6^(L-1) 改为线性 wand_price_base 250 + wand_price_per_level 150 × (L-1)；150/250 = 180/300，法器价恒为当层收入的 5/6，与线性收入同步。原指数价 L7 约 4194，是当层收入的 3 倍。符价 80 × 2^(t-1) 按品阶（最多 5 阶）而非层数，不随层指数膨胀，暂不改。复议条件同收入：第 4 层做出来之后。",
     "design：新增 fate_in_mvp: false——命格三选一推到 EA 后（见 docs/01-decision-twist.md）；fate_choose_three 保留为命格系统本身的规则。",
     "sanity.possession：入魔由设计原文的「另一条路线」改为可逆状态（参考饥荒理智系统）：神智 0 入魔、≥20 出魔；入魔时幻觉敌人变实，击杀 +10 神智并掉魇烬；阴性敌人中立；每 30 秒失控 1 秒；禁符改付 0.5 盏魄灯；每次入魔本局神智上限 −10（最多 −30）。见 S-0004。",
-    "economy：烧银换冥钱平时 1:10、子时 1:20（设计原文 3.6 写作「子时 1:5」，方向写反——子时鬼门开，阴间交易应更划算；批注 C34）。只能银换冥钱，不能反向兑换，防止昼夜套利（批注 C16）。双货币属 M2 内容，数值先占位。"
+    "economy：烧银换冥钱平时 1:10、子时 1:20（设计原文 3.6 写作「子时 1:5」，方向写反——子时鬼门开，阴间交易应更划算；批注 C34）。只能银换冥钱，不能反向兑换，防止昼夜套利（批注 C16）。双货币属 M2 内容，数值先占位。",
+    "sanity.possession（2026-11-20 D-M1-1 拍板）：M1 精简为 4 条核心效果（心魔变实击杀+10神智、阴物中立、禁符改熄0.5盏灯、魔痕-10上限最多-30），设置 lose_control_enabled=false 与 yan_jin_enabled=false 暂不做失控与魇烬；复议条件 = M1-08 实机自测后。",
+    "fire_heat（2026-11-20 D-M1-3 拍板）：新增 M1-12 热/火占位参数（fire_source_heat=400、burning 2% 最大生命/s 持续 5s、wet 5s 防点燃），源自 docs/tech/sim-fire-heat-design.md；复议条件 = M1-12 实机调参。"
   ]
 }
