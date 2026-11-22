@@ -148,7 +148,7 @@
       "tier": "boss",
       "archetype": "drought_demon",
       "hp": 420,
-      "damage": 14,
+      "damage": 22,
       "damage_type": "火",
       "lantern_damage": 0.0,
       "half_w": 6.0,
@@ -161,19 +161,19 @@
         "火": 0.25
       },
       "move_mode": "boss",
-      "patrol_speed": 22.0,
-      "chase_speed": 52.0,
-      "lunge_speed": 136.0,
-      "dash_speed": 155.0,
+      "patrol_speed": 24.0,
+      "chase_speed": 58.0,
+      "lunge_speed": 148.0,
+      "dash_speed": 172.0,
       "aggro_range": 220.0,
       "attack_range": 195.0,
-      "telegraph_ticks": 24,
-      "attack_cooldown_ticks": 62,
+      "telegraph_ticks": 22,
+      "attack_cooldown_ticks": 50,
       "phase2_hp_ratio": 0.5,
       "wet_armor_crack_mult": 1.4,
       "projectile": {
-        "speed": 8.8,
-        "damage": 10.0,
+        "speed": 9.2,
+        "damage": 16.0,
         "damage_type": "火",
         "element": "火",
         "ttl_ticks": 115,
@@ -189,6 +189,7 @@
   "v1_deviations": [
     "level-01-coalmine.json 中旱魃 drop.talisman 写为简名 bifang_fire，此处直接对齐 data/talismans.json 正式 id body-bifang-huo 以便 tools/validate_data.py 强引用校验。",
     "旱魃与硫烟鬼火均加入水接触直接灼伤（湿润破甲 1.4x + 产蒸汽），落实 level-01-coalmine.json「逼玩家第一次用葫芦装环境水」的设计意图；数值为 M1 占位，待 M1-α 实机自测调参。",
-    "M1-α 旱魃 AI 升级为空间效用选招（refs/cards/decisions/boss-ai-mobility.md#utility-spatial-reposition）：追击速度 42->52、新增烈焰滑步 155 / 跃台 / 贴脸炽浪震退 / 湿破甲 0.55s 硬直脱困，地面敌人同步启用粉末密度分级减速。"
+    "M1-α 旱魃 AI 升级为空间效用选招（refs/cards/decisions/boss-ai-mobility.md#utility-spatial-reposition）：追击速度 42->52、新增烈焰滑步 155 / 跃台 / 贴脸炽浪震退 / 湿破甲 0.55s 硬直脱困，地面敌人同步启用粉末密度分级减速。",
+    "M1-α 复测难度加压（2026-11-21）：旱魃近战/扑台伤害 14->22（二阶段 26）、火弹 10->16（二阶段 20）、滑步 18/22、贴脸炽浪 20/24、P2 灼浪 24，追速 52->58、滑步 155->172、攻间冷却 62->50，并加入主动畏水避让（巡逻折返 / 跨洼跃避 / 滑步遇水急刹 / 脚边与头顶来水向干侧闪跳）。"
   ]
 }

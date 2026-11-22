@@ -143,9 +143,10 @@ func spawn_from_wang_anchors(wang_gen) -> int:
 	if wisp_idx < 0 and mob_anchors.size() >= 2:
 		wisp_idx = 0 if elite_idx != 0 else 1
 
-	# 3) 逐锚点刷怪并贴地/悬空防掩埋校准
+	# 3) 逐锚点刷怪并贴地/悬空防掩埋校准（手工房同步翻倍配 1 只随行小怪，每场景 2 只怪）
 	for i in range(mob_anchors.size()):
 		var a: Dictionary = mob_anchors[i]
+		var aid: String = String(a.get("id", ""))
 		var def_id := "enemy-coal-ghost"
 		if i == elite_idx:
 			def_id = "enemy-painted-skin"
@@ -153,23 +154,34 @@ func spawn_from_wang_anchors(wang_gen) -> int:
 			def_id = "enemy-gas-wisp"
 		else:
 			var roll := absi(wang_gen.seed_used + i * 37) % 100
-			if roll < 55:
+			if roll < 50:
 				def_id = "enemy-coal-ghost"
-			elif roll < 85:
+			elif roll < 80:
 				def_id = "enemy-earth-worm"
 			else:
 				def_id = "enemy-gas-wisp"
-		var d: Dictionary = defs.get(def_id, {})
-		var hw := ceili(float(d.get("half_w", 3.0)))
-		var hh := ceili(float(d.get("height", 10.0)))
-		var safe_pos: Vector2i = wang_gen.find_safe_stand_pos(sim, a["pos"], hw, hh)
-		if String(d.get("move_mode", "ground")) == "fly":
-			safe_pos = _lift_flyer_spawn(safe_pos, hw, hh)
-		spawn_by_id(def_id, safe_pos, "mine_%s_%d" % [String(d.get("archetype", "mob")), i], i + 1)
+		_spawn_calibrated_mob(wang_gen, def_id, a["pos"], "mine_%s_%d" % [String(defs.get(def_id, {}).get("archetype", "mob")), i], i + 1)
 
+		# 手工非 BOSS 房（水银池 / 瓦斯囊）同步翻倍：在同房错开位置追加 1 只随行小怪
+		if aid == "anchor-mob" or aid == "anchor-mob-02":
+			var comp_id := "enemy-coal-ghost" if aid == "anchor-mob" else "enemy-gas-wisp"
+			var base_p: Vector2i = a["pos"]
+			var comp_origin := Vector2i(base_p.x - 48, base_p.y)
+			_spawn_calibrated_mob(wang_gen, comp_id, comp_origin, "mine_comp_%s_%d" % [String(defs.get(comp_id, {}).get("archetype", "mob")), i], i + 101)
+
+	print("M1_ENEMIES_SPAWNED total=%d boss=%s" % [ais.size(), "yes" if boss_ent != null else "no"])
 	return ais.size()
 
-func _lift_flyer_spawn(floor_pos: Vector2i, hw: int, hh: int) -> Vector2i:
+func _spawn_calibrated_mob(wang_gen, def_id: String, origin: Vector2i, eid: String, seed_off: int) -> void:
+	var d: Dictionary = defs.get(def_id, {})
+	var hw := ceili(float(d.get("half_w", 3.0)))
+	var hh := ceili(float(d.get("height", 10.0)))
+	var safe_pos: Vector2i = wang_gen.find_safe_stand_pos(sim, origin, hw, hh)
+	if String(d.get("move_mode", "ground")) == "fly":
+		safe_pos = _lift_flyer_spawn(wang_gen, safe_pos, hw, hh)
+	spawn_by_id(def_id, safe_pos, eid, seed_off)
+
+func _lift_flyer_spawn(wang_gen, floor_pos: Vector2i, hw: int, hh: int) -> Vector2i:
 	var best := floor_pos
 	for lift in [18, 12, 6]:
 		var cand := Vector2i(floor_pos.x, maxi(floor_pos.y - lift, hh + 2))
@@ -181,7 +193,7 @@ func _lift_flyer_spawn(floor_pos: Vector2i, hw: int, hh: int) -> Vector2i:
 					break
 			if not ok:
 				break
-		if ok:
+		if ok and (wang_gen == null or not wang_gen.has_powder_above(sim, cand.x, cand.y - hh + 1, hw, 140)):
 			return cand
 	return best
 

@@ -151,8 +151,8 @@ func rasterize_to_sim(sim: SimWorldNode) -> int:
 	])
 	return ms
 
-## 开局全图预沉降：光栅化后一次性让悬空液体与粉末自然落底摊平，避免玩家走近才「现加载」把敌人活埋。
-func settle_world(sim: SimWorldNode, ticks: int = 120) -> int:
+## 开局全图预沉降：光栅化后一次性让悬空液体与矿粉彻底落底摊平，避免玩家走近才「现加载」把敌人活埋。
+func settle_world(sim: SimWorldNode, ticks: int = 240) -> int:
 	if sim == null or not sim.has_world() or ticks <= 0:
 		return 0
 	var t0 := Time.get_ticks_msec()
@@ -167,31 +167,95 @@ func settle_world(sim: SimWorldNode, ticks: int = 120) -> int:
 	print("M1_WANG_SETTLED ticks=%d ms=%d" % [ticks, ms])
 	return ms
 
-## 预沉降后校准实体/石碑位置：自动脱出任何沉积粉末或岩壁并贴地站稳，杜绝被埋。
+## 预沉降后校准实体/石碑位置：自动升至土堆顶部并校验头顶无悬空粉末，确保绝不加载在土堆内部或下方。
 func find_safe_stand_pos(sim: SimWorldNode, origin: Vector2i, half_w: int = 3, height: int = 12) -> Vector2i:
 	if sim == null or not sim.has_world():
 		return origin
 	var w := sim.get_world_width()
 	var h := sim.get_world_height()
-	for dx_off in [0, -10, 10, -20, 20, -32, 32]:
-		var cx := clampi(origin.x + dx_off, half_w + 2, w - half_w - 3)
-		var y := clampi(origin.y, height + 2, h - 4)
-		for _up in range(80):
-			if _box_clear(sim, cx, y, half_w, height):
-				break
-			y -= 2
-			if y <= height + 2:
-				break
-		if not _box_clear(sim, cx, y, half_w, height):
-			continue
-		for _dn in range(60):
-			if y + 1 >= h - 2 or sim.is_solid(cx, y + 1):
-				break
-			if not _box_clear(sim, cx, y + 1, half_w, height):
-				break
-			y += 1
-		return Vector2i(cx, y)
+	var room_w := ROOM_TILES_W * TILE_SIZE
+	var room_h := ROOM_TILES_H * TILE_SIZE
+	var mc := clampi(origin.x / room_w, 0, MACRO_COLS - 1)
+	var mr := clampi(origin.y / room_h, 0, MACRO_ROWS - 1)
+	var min_x := maxi(mc * room_w + half_w + 18, half_w + 2)
+	var max_x := mini((mc + 1) * room_w - half_w - 18, w - half_w - 3)
+	var min_y := maxi(mr * room_h + height + 18, height + 2)
+	var max_y := mini((mr + 1) * room_h - 18, h - 4)
+
+	var offsets: Array[int] = [0, -12, 12, -24, 24, -36, 36, -48, 48, -64, 64, -80, 80]
+	# 三轮递进：0=干地+头顶无粉 -> 1=允许涉液+头顶无粉 -> 2=仅脱出实心格兜底
+	for pass_idx in range(3):
+		for dx_off in offsets:
+			var cx := clampi(origin.x + dx_off, min_x, max_x)
+			var y := clampi(origin.y, min_y, max_y)
+			var found_open := false
+			while y >= min_y:
+				if _box_clear(sim, cx, y, half_w, height):
+					if pass_idx == 2 or not has_powder_above(sim, cx, y - height + 1, half_w, 140):
+						found_open = true
+						break
+				y -= 1
+			if not found_open:
+				continue
+			# 从空旷位贴落至最近实心表面（岩石或沉降粉堆顶）
+			while y + 1 <= max_y:
+				if _row_has_solid(sim, cx, y + 1, half_w):
+					break
+				if not _box_clear(sim, cx, y + 1, half_w, height):
+					break
+				y += 1
+			if pass_idx < 2 and has_powder_above(sim, cx, y - height + 1, half_w, 140):
+				continue
+			if pass_idx == 0 and _box_has_liquid(sim, cx, y, half_w, height):
+				continue
+			return Vector2i(cx, y)
 	return origin
+
+## 检测实体头顶至上方岩顶之间是否存在任何粉末（避免实体刷新在土堆下方或悬空矿粉正下方）。
+func has_powder_above(sim: SimWorldNode, cx: int, top_y: int, half_w: int, max_scan: int = 140) -> bool:
+	if sim == null or not sim.has_world():
+		return false
+	var w := sim.get_world_width()
+	var y_end := maxi(top_y - max_scan, 0)
+	for gx in range(cx - half_w, cx + half_w + 1):
+		if gx < 0 or gx >= w:
+			continue
+		for gy in range(top_y - 1, y_end - 1, -1):
+			var m: int = sim.get_cell(gx, gy)
+			if m <= 0:
+				continue
+			var st: int = sim.get_material_state(m)
+			if st == 4: # SIM_STATE_STATIC（上方岩壁/竹木顶）
+				break
+			if st == 1: # SIM_STATE_POWDER（上方有土堆/矿粉）
+				return true
+	return false
+
+func _row_has_solid(sim: SimWorldNode, cx: int, row_y: int, half_w: int) -> bool:
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	if row_y < 0 or row_y >= h:
+		return true
+	for gx in range(cx - half_w, cx + half_w + 1):
+		if gx < 0 or gx >= w:
+			return true
+		if sim.is_solid(gx, row_y):
+			return true
+	return false
+
+func _box_has_liquid(sim: SimWorldNode, cx: int, cy: int, half_w: int, height: int) -> bool:
+	var w := sim.get_world_width()
+	var h := sim.get_world_height()
+	for gy in range(cy - height + 1, cy + 1):
+		if gy < 0 or gy >= h:
+			continue
+		for gx in range(cx - half_w, cx + half_w + 1):
+			if gx < 0 or gx >= w:
+				continue
+			var m: int = sim.get_cell(gx, gy)
+			if m > 0 and sim.get_material_state(m) == 2:
+				return true
+	return false
 
 func _box_clear(sim: SimWorldNode, cx: int, cy: int, half_w: int, height: int) -> bool:
 	for gy in range(cy - height + 1, cy + 1):
@@ -453,10 +517,11 @@ func _build_wang_cavern(mc: int, mr: int, mask: int, variant: int) -> void:
 		for lx in range(9, 15):
 			_set_tile(ox + lx, oy + 7, "bamboo", false)
 	elif variant == 2:
-		# 洞底小型聚水或煤堆
-		for lx in range(8, 12):
+		# 洞底小型聚水或煤堆（避开 cols 10..13 竖井口，防楼上水洼直接漏进下方房间/BOSS 房）
+		var puddle_mat := "coal" if ((mask & EDGE_S) != 0 and mr == MACRO_ROWS - 2) else ("water" if _rand_int(2) == 0 else "coal")
+		for lx in range(5, 9):
 			if _get_tile(ox + lx, oy + 11) == "empty":
-				_set_tile(ox + lx, oy + 11, "water" if _rand_int(2) == 0 else "coal", false)
+				_set_tile(ox + lx, oy + 11, puddle_mat, false)
 	else:
 		# 竹木支护横梁
 		for lx in range(6, 10):
@@ -484,12 +549,13 @@ func _build_wang_cavern(mc: int, mr: int, mask: int, variant: int) -> void:
 			elif roll < 30:
 				_set_tile(gx, gy, "lime", false)
 
-	# 5) 刷怪锚点（每块 0–1 个，给 M1-06 与当前靶标复用）
-	if _rand_int(100) < 75:
-		var floor_y := _find_open_floor_y(ox + 12, oy + 5, oy + ROOM_TILES_H - 2)
+	# 5) 刷怪锚点（M1-α 密度翻倍：每块程序化矿道固定 2 处左右分散刷怪点）
+	for slot_i in range(2):
+		var col_off := 8 if slot_i == 0 else 16
+		var floor_y := _find_open_floor_y(ox + col_off, oy + 4, oy + ROOM_TILES_H - 2)
 		spawn_anchors.append({
-			"id": "wang_spawn_%d_%d" % [mc, mr],
-			"pos": Vector2i((ox + 12) * TILE_SIZE + 8, floor_y * TILE_SIZE + 14),
+			"id": "wang_spawn_%d_%d_%d" % [mc, mr, slot_i],
+			"pos": Vector2i((ox + col_off) * TILE_SIZE + 8, floor_y * TILE_SIZE + 14),
 			"table": "mobs",
 			"boss_id": "",
 			"count": 1,

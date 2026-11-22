@@ -31,7 +31,7 @@ const JUMP_BUFFER := 0.10           # s 跳跃缓冲（m1-jump-feel P0：落地�
 const JUMP_CUT_WINDOW := 0.10       # s 可变跳高切断窗口（适配浮空条，过窗后不砍浮空惯性）
 const JUMP_CUT := 0.35              # 窗口内松手切断上升倍率
 const ENEMY_HURT_INVULN_TICKS := 24 # 0.40s 敌击无敌帧（防止近战贴身连帧秒杀）
-const STEP_UP_MAX := 3              # cells 走过碎沙/粉堆自动迈步上限
+const STEP_UP_MAX := 4              # cells 走过碎沙/粉坡自动迈步上限（平稳翻越土堆表面不钻底）
 const MAX_SUBSTEP_PX := 2.0         # 0.5 cell/步，防止穿墙或贴墙留缝
 
 const BODY_HALF_W := 2              # cells：[cx-2, cx+2] = 5 cells
@@ -258,8 +258,8 @@ func step_physics(delta: float, move_x: float, thrust: bool, dive: bool) -> void
 		_powder_fill = 0.0
 		powder_speed_mult = 1.0
 
-	# 1) 接地判定与土狼时间（静态固体必定支撑；未按 S 且未深埋时粉堆表面也可站立）
-	var grounded_now := _is_grounded_at(position, dive) and velocity.y >= -1.0
+	# 1) 接地判定与土狼时间（静态固体与沉降粉堆表面始终承托脚底，按 S 也不再下沉穿堆）
+	var grounded_now := _is_grounded_at(position) and velocity.y >= -1.0
 	on_ground = grounded_now
 	if on_ground:
 		_coyote_timer = COYOTE_TIME
@@ -343,33 +343,34 @@ func step_physics(delta: float, move_x: float, thrust: bool, dive: bool) -> void
 		var dive_cap := MAX_FALL_SPEED * (powder_speed_mult * 0.70 if in_powder else 1.15)
 		velocity.y = minf(velocity.y + FAST_FALL_ACCEL * dt, dive_cap)
 
-	# 4) 分轴子步积分（水平带 1-3 格像素迈步与松散粉末穿行，垂直碰地/顶清零速度）
+	# 4) 分轴子步积分（水平 1-4 格粉坡迈步与落尘软穿行，垂直碰岩/粉面稳停，杜绝钻入土堆下方）
 	var dx_px := velocity.x * float(SCALE) * dt
 	var dy_px := velocity.y * float(SCALE) * dt
 	if not _move_horizontal(dx_px):
 		velocity.x = 0.0
-	if not _move_vertical(dy_px, dive):
+	if not _move_vertical(dy_px):
 		if velocity.y > 0.0:
 			on_ground = true
 		velocity.y = 0.0
 
 	# 5) 落地确认
-	if not on_ground and velocity.y >= 0.0 and _is_grounded_at(position, dive):
+	if not on_ground and velocity.y >= 0.0 and _is_grounded_at(position):
 		on_ground = true
 
 	_update_visual()
 
-func _is_grounded_at(px_pos: Vector2, dive: bool) -> bool:
+func _is_grounded_at(px_pos: Vector2) -> bool:
 	if not powder_wade_enabled:
-		return _blocked_count(px_pos + Vector2(0.0, 1.0)) > 0
-	if _hard_blocked_at(px_pos + Vector2(0.0, 1.0)):
+		return _blocked_count(px_pos + Vector2(0.0, 2.0)) > 0
+	if _hard_blocked_at(px_pos + Vector2(0.0, 2.0)):
 		return true
-	if dive or _powder_fill >= 0.28:
-		return false
-	var c := Vector2i(floori(px_pos.x / float(SCALE)), floori((px_pos.y + 1.0) / float(SCALE)))
-	return PowderPhysics.has_surface_below(sim, c.x, c.y, BODY_HALF_W, true)
+	var cx := floori(px_pos.x / float(SCALE))
+	var below_y := floori((px_pos.y + 2.0) / float(SCALE))
+	if below_y > floori(px_pos.y / float(SCALE)):
+		return PowderPhysics.has_solid_at_row(sim, cx, below_y, BODY_HALF_W)
+	return PowderPhysics.has_surface_below(sim, cx, floori(px_pos.y / float(SCALE)), BODY_HALF_W, true)
 
-## 水平子步移动；遇到 1-3 格碎屑/起伏自动向上迈步，遇到更高松散粉堆时减速涉过而非硬卡死。
+## 水平子步移动：优先向上迈 1..STEP_UP_MAX 格翻越粉坡；空中落尘/薄粉按密度减速穿行；严禁从侧面钻入厚土堆底部。
 func _move_horizontal(total_dx: float) -> bool:
 	var dist := absf(total_dx)
 	if dist < 0.0001:
@@ -382,7 +383,7 @@ func _move_horizontal(total_dx: float) -> bool:
 		if target_blocks == 0:
 			position = target
 			continue
-		# 优先尝试向上迈 1..STEP_UP_MAX 格（自然走上平缓煤/硫斜坡）
+		# 优先尝试向上迈 1..STEP_UP_MAX 格（自然走上煤/硫/土斜坡表面）
 		var stepped := false
 		for lift in range(1, STEP_UP_MAX + 1):
 			var lifted := target + Vector2(0.0, -float(lift * SCALE))
@@ -392,8 +393,18 @@ func _move_horizontal(total_dx: float) -> bool:
 				break
 		if stepped:
 			continue
-		# 粉末涉过模式：只要未撞静态硬墙（岩/竹木），即可穿过松散粉末（由上层密度倍率减速）
+		# 粉末涉过模式：允许穿过空中落尘与薄粉，但禁止从土堆外侧横向钻入厚沉降土堆下方
 		if powder_wade_enabled and not _hard_blocked_at(target):
+			var tcx := floori(target.x / float(SCALE))
+			var tcy := floori(target.y / float(SCALE))
+			if _powder_fill < 0.25 and PowderPhysics.is_settled_mound_wall(sim, tcx, tcy, BODY_HALF_W, BODY_HEIGHT):
+				return false
+			# 若已被上方塌方落尘裹住，横向脱困时优先自动上浮 1 格回到土堆表面
+			if _powder_fill >= 0.25:
+				var buoy := target + Vector2(0.0, -float(SCALE))
+				if not _hard_blocked_at(buoy) and _blocked_count(buoy) < target_blocks:
+					position = buoy
+					continue
 			position = target
 			continue
 		# 经典脱困兜底
@@ -404,7 +415,7 @@ func _move_horizontal(total_dx: float) -> bool:
 		return false
 	return true
 
-func _move_vertical(total_dy: float, dive: bool = false) -> bool:
+func _move_vertical(total_dy: float) -> bool:
 	var dist := absf(total_dy)
 	if dist < 0.0001:
 		return true
@@ -416,11 +427,14 @@ func _move_vertical(total_dy: float, dive: bool = false) -> bool:
 			if _hard_blocked_at(target):
 				return false
 			if sub_y < 0.0:
-				# 上升穿行松散粉末与落尘不被挡顶
+				# 上升穿行空中落尘不被挡顶（保证随时能跳出塌方）
 				position = target
 				continue
-			# 向下落：未按 S 且未深埋时踩到粉坡顶即平稳站住；按 S 或已涉入粉堆则缓沉穿过
-			if not dive and _powder_fill < 0.28 and _blocked_count(target) > _blocked_count(position):
+			# 向下落：脚底触及任何岩石或沉降粉末行立刻稳停，人物绝不能沉到土堆下面
+			var cur_cy := floori(position.y / float(SCALE))
+			var tgt_cx := floori(target.x / float(SCALE))
+			var tgt_cy := floori(target.y / float(SCALE))
+			if tgt_cy > cur_cy and PowderPhysics.has_solid_at_row(sim, tgt_cx, tgt_cy, BODY_HALF_W):
 				return false
 			position = target
 			continue

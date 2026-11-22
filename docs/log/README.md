@@ -7,6 +7,7 @@
 
 | 日期 | 文件 | 类型 | 篇幅 | 一句话 |
 |---|---|---|---|---|
+| 2026-11-22 | [2026-11-22-01-m1-alpha-balance-powder-boss-water.md](2026-11-22-01-m1-alpha-balance-powder-boss-water.md) | 更新 + 决策 | 详细 | M1-α 复测四项调优：每战斗房刷怪翻倍至 2 只（全层 21 只）、240 tick 预沉降+禁下沉/防钻底土堆物理、旱魃提伤与水源迁至右上高台、旱魃主动畏水避让 AI |
 | 2026-11-21 | [2026-11-21-20-m1-progress-and-ai-demos.md](2026-11-21-20-m1-progress-and-ai-demos.md) | 评审 + 建议 | 详细 | 对照单提示 AI 游戏演示与现有 M1-α，建议先用旱魃房验证环境解法与一段完整观感 |
 | 2026-11-21 | [2026-11-21-19-multi-character-archetypes-assessment.md](2026-11-21-19-multi-character-archetypes-assessment.md) | 建议 + 评审 | 摘要 | 评估多角色选择系统设想（方士/纯近战/纯触手邪神子嗣）：架构天然可插拔、零改 sim_core，建议排入 M3/M4 并在近战/触手中紧扣 D1 元素沙盒 |
 | 2026-11-21 | [2026-11-21-18-hit-feel-overlap-audit.md](2026-11-21-18-hit-feel-overlap-audit.md) | 评审 | 摘要 | 打击感同题材视频去重：6 层重叠 6/6、不新开卡；唯一新增检查点是敌人受击的击退/后仰（本作只做了白闪） |

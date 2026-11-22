@@ -498,8 +498,8 @@ func _start_round() -> void:
 		if not bool(conn.get("connected", false)):
 			push_error("M1-04: Wang Tile 连通性校验失败：%s" % str(conn))
 		wang_gen.rasterize_to_sim(sim)
-		# 全图预沉降（120 tick）：让所有房间悬空的液体与矿粉自然落底摊平并休眠，再放实体/石碑
-		wang_gen.settle_world(sim, 120)
+		# 全图预沉降（240 tick）：让所有房间悬空的液体与矿粉彻底落底摊平并休眠，再放实体/石碑
+		wang_gen.settle_world(sim, 240)
 		var settled_steles: Array[Dictionary] = []
 		for raw_s in wang_gen.steles:
 			if raw_s is Dictionary:
@@ -1429,17 +1429,32 @@ func _run_smoke() -> void:
 				fail = "M1-04 创建 1536x672 Wang 世界失败"
 			else:
 				var rast_ms: int = wg.rasterize_to_sim(sim)
-				var settle_ms: int = wg.settle_world(sim, 120)
-				# 校验全部刷怪点经预沉降+安全站位校准后无任何实心格掩埋
+				var settle_ms: int = wg.settle_world(sim, 240)
+				# 校验刷怪翻倍（>=18）且所有真实生成怪物均不在实心格或土堆/悬空粉末下方
+				combat.reset_round()
+				enemy_manager.reset_round()
+				var wang_spawned: int = enemy_manager.spawn_from_wang_anchors(wg)
 				var buried := 0
-				for raw_a in wg.spawn_anchors:
-					if raw_a is Dictionary:
-						var sp: Vector2i = wg.find_safe_stand_pos(sim, raw_a["pos"], 3, 10)
-						for gy in range(sp.y - 9, sp.y + 1):
-							for gx in range(sp.x - 2, sp.x + 3):
-								if sim.is_solid(gx, gy):
-									buried += 1
-									break
+				var under_powder := 0
+				for ai_chk in enemy_manager.ais:
+					var e_chk = ai_chk.ent
+					var sp: Vector2i = e_chk.cell_pos()
+					var hw_c: int = ceili(float(e_chk.half_w))
+					var hh_c: int = ceili(float(e_chk.height))
+					var hit_solid := false
+					for gy in range(sp.y - hh_c + 1, sp.y + 1):
+						for gx in range(sp.x - hw_c, sp.x + hw_c + 1):
+							if sim.is_solid(gx, gy):
+								hit_solid = true
+								break
+						if hit_solid:
+							break
+					if hit_solid:
+						buried += 1
+					if wg.has_powder_above(sim, sp.x, sp.y - hh_c + 1, hw_c, 140):
+						under_powder += 1
+				combat.reset_round()
+				enemy_manager.reset_round()
 				# 校验 M1 实机模式火焰/毒烟不阻挡玩家移动
 				player.setup(sim)
 				player.fire_blocks_movement = false
@@ -1465,8 +1480,10 @@ func _run_smoke() -> void:
 				var hp_before_col: float = vitals.hp
 				biome_hazards.on_event({"type": "terrain_dug", "tick": 20, "pos": qs_pos, "value": 650.0}, qs_pos)
 				var hp_after_col: float = vitals.hp
-				if buried > 0:
-					fail = "M1-04 预沉降后仍有 %d 个刷怪格被掩埋" % buried
+				if wang_spawned < 18:
+					fail = "M1-04 矿井翻倍刷怪数量不足（%d < 18）" % wang_spawned
+				elif buried > 0 or under_powder > 0:
+					fail = "M1-04 预沉降后仍有怪物被掩埋或压在土堆下方（buried=%d under_powder=%d）" % [buried, under_powder]
 				elif blocked_by_gas:
 					fail = "M1-04 火焰/毒烟错误阻挡了玩家移动"
 				elif txt_sane.is_empty() or txt_sane == txt_corrupt or event_bus.count_of("rule_triggered") < 1:
@@ -1478,8 +1495,8 @@ func _run_smoke() -> void:
 				elif event_bus.count_of("hazard_triggered") < 2:
 					fail = "M1-04 C-EVT hazard_triggered 计数不足（%d）" % event_bus.count_of("hazard_triggered")
 				else:
-					print("T4B_SMOKE_STEP M1-04Wang矿井 seeds=%d/5 connected=100%% macros=12/12 rast_ms=%d settle_ms=%d buried=0 gas_pass=ok" % [
-						seeds_ok, rast_ms, settle_ms
+					print("T4B_SMOKE_STEP M1-04Wang矿井 seeds=%d/5 connected=100%% macros=12/12 mobs=%d rast_ms=%d settle_ms=%d buried=0 under_powder=0 gas_pass=ok" % [
+						seeds_ok, wang_spawned, rast_ms, settle_ms
 					])
 
 	# M1-10 反馈层：走真实路径（施法火光/后坐 → 命中/击杀 → 分层音效 → 顿帧复位）
@@ -1735,7 +1752,7 @@ func _run_smoke() -> void:
 		if jf_fail != "":
 			fail = jf_fail
 
-	# M1-α 三项打磨断言：粉末三级密度减速（玩家+小怪）/ 浮空收敛+下落慢充+防无限飞 / 旱魃空间AI与湿破甲脱困
+	# M1-α 打磨与复测断言：土堆禁下沉+表层三级减速（玩家+小怪）/ 浮空收敛+下落慢充+防无限飞 / 旱魃高伤+空间AI+主动畏水跃避+湿破甲脱困
 	if fail == "":
 		var a_fail := ""
 		var mat_rock_a: int = sim.material_id("rock")
@@ -1744,30 +1761,38 @@ func _run_smoke() -> void:
 		var mat_cin_a: int = sim.material_id("cinnabar")
 		var mat_wat_a: int = sim.material_id("water")
 
-		# 17a) 粉末分级减速（煤 > 硫磺 > 朱砂，且均不卡死）+ 地面小怪同步受重粉减速
-		for gy in range(295, 323):
+		# 17a) 踩在沉降土堆顶部按 S 绝不下沉 + 表面行走三级密度减速（煤 > 硫磺 > 朱砂）+ 地面小怪同步受重粉减速且不下沉
+		for gy in range(290, 323):
 			for gx in range(420, 560):
 				sim.set_cell(gx, gy, mat_rock_a if gy >= 316 else 0)
 		var wades: Array[float] = []
+		var player_no_sink := true
 		for mat_id_t in [mat_coal_a, mat_sul_a, mat_cin_a]:
-			for gy in range(304, 316):
+			for gy in range(306, 316):
 				for gx in range(430, 520):
 					sim.set_cell(gx, gy, mat_id_t)
-			player.set_cell_pos(Vector2i(436, 315))
+			# 校验按 S（dive=true）仍稳站土堆表面不下沉
+			player.set_cell_pos(Vector2i(436, 305))
 			player.reset_motion()
+			for _d in range(20):
+				player.step_physics(FIXED_DT, 0.0, false, true)
+			if player.cell_pos().y > 305:
+				player_no_sink = false
+			# 校验在粉堆表面水平行走产生清晰三级密度减速
 			var x0_w: float = player.position.x
 			for _i in range(24):
 				player.step_physics(FIXED_DT, 1.0, false, false)
 			wades.append((player.position.x - x0_w) / float(SCALE))
-		# 地面小怪在朱砂堆中同样涉过且显著减速
+		# 地面小怪在朱砂堆表面行走：同样显著减速且不下沉到土堆下方
 		combat.reset_round()
 		enemy_manager.reset_round()
-		var cin_ghost = enemy_manager.spawn_by_id("enemy-coal-ghost", Vector2i(452, 315), "smoke_cin_ghost", 5)
+		var cin_ghost = enemy_manager.spawn_by_id("enemy-coal-ghost", Vector2i(452, 305), "smoke_cin_ghost", 5)
 		var cin_ai = enemy_manager.get_ai_for("smoke_cin_ghost")
 		var cin_x0: float = cin_ghost.pos.x
-		for _i in range(20):
-			enemy_manager.step_tick(Vector2(500.0, 315.0), sim.get_tick())
-		var mob_cin_slow: bool = cin_ai != null and cin_ai.powder_speed_mult < 0.55 and cin_ghost.pos.x > cin_x0 + 1.0
+		for _i in range(24):
+			enemy_manager.step_tick(Vector2(500.0, 305.0), sim.get_tick())
+		var mob_cin_slow: bool = (cin_ai != null and cin_ai.powder_speed_mult < 0.55
+				and cin_ghost.pos.x > cin_x0 + 1.0 and float(cin_ghost.pos.y) <= 306.0)
 
 		# 17b) 浮空收敛（单气爬 80..130 格）+ 延迟下落慢充 + 高频点按防无限滞空
 		for gy in range(130, 323):
@@ -1808,7 +1833,7 @@ func _run_smoke() -> void:
 		var tap_drop_cells: float = (player.position.y - tap_y0) / float(SCALE)
 		var no_inf_flight: bool = tap_drop_cells > 40.0 and player.levitate < 25.0
 
-		# 17c) 旱魃空间效用 AI：高台玩家反制 + 湿破甲硬直后主动跃离水洼
+		# 17c) 旱魃高伤 + 空间效用 AI + 主动畏水跃避（未沾水即跳开）+ 湿破甲硬直后跃离水洼
 		for gy in range(195, 277):
 			for gx in range(118, 263):
 				var bdr := (gy >= 272 or gy <= 198 or gx <= 120 or gx >= 260)
@@ -1817,6 +1842,7 @@ func _run_smoke() -> void:
 		enemy_manager.reset_round()
 		var s_boss = enemy_manager.spawn_by_id("enemy-drought-demon", Vector2i(210, 271), "smoke_smart_boss", 6)
 		var s_boss_ai = enemy_manager.get_boss_ai()
+		var boss_dmg_raised: bool = float(enemy_manager.defs["enemy-drought-demon"].get("damage", 0.0)) >= 20.0
 		s_boss_ai.cooldown_ticks = 0
 		var high_counter_ok := false
 		for _t in range(45):
@@ -1826,6 +1852,29 @@ func _run_smoke() -> void:
 			if s_boss_ai.active_boss_move in ["platform_leap", "fan_fire"] and s_boss_ai.state in ["telegraph", "attack"]:
 				high_counter_ok = true
 				break
+		# 主动畏水跃避：干燥旱魃脚前放一滩水洼（不直接盖身），应主动触发 avoid_water 跳避而非闷头踩水
+		for gy in range(250, 272):
+			for gx in range(122, 258):
+				sim.set_cell(gx, gy, 0)
+		for gy in range(266, 272):
+			for gx in range(186, 198):
+				sim.set_cell(gx, gy, mat_wat_a)
+		s_boss.pos = Vector2(210.0, 271.0)
+		s_boss.vel = Vector2.ZERO
+		s_boss.statuses.erase("wet")
+		s_boss_ai.state = "chase"
+		s_boss_ai.on_ground = true
+		s_boss_ai.cooldown_ticks = 40
+		s_boss_ai.water_avoid_cd = 0
+		s_boss_ai.was_wet = false
+		var saw_avoid_water := false
+		for _t in range(36):
+			sim.step_tick()
+			combat.step_tick()
+			enemy_manager.step_tick(Vector2(150.0, 271.0), sim.get_tick())
+			if s_boss_ai.active_boss_move == "avoid_water" and float(s_boss.vel.y) < -30.0:
+				saw_avoid_water = true
+				break
 		# 湿破甲硬直与离水跳
 		for gy in range(266, 272):
 			for gx in range(198, 222):
@@ -1834,6 +1883,7 @@ func _run_smoke() -> void:
 		s_boss.vel = Vector2.ZERO
 		s_boss_ai.state = "chase"
 		s_boss_ai.wet_flinch_cd = 0
+		s_boss_ai.water_avoid_cd = 60
 		s_boss_ai.was_wet = false
 		var saw_flinch := false
 		var saw_escape := false
@@ -1846,20 +1896,24 @@ func _run_smoke() -> void:
 			if s_boss_ai.active_boss_move == "escape_leap" and float(s_boss.vel.y) < -30.0:
 				saw_escape = true
 
-		if not (wades[0] > wades[1] and wades[1] > wades[2] and wades[2] > 3.0):
+		if not player_no_sink:
+			a_fail = "M1-α 人物按 S 仍能下沉进入土堆"
+		elif not (wades[0] > wades[1] and wades[1] > wades[2] and wades[2] > 3.0):
 			a_fail = "M1-α 粉末分级减速阶梯异常（coal=%.1f sul=%.1f cin=%.1f）" % [wades[0], wades[1], wades[2]]
 		elif not mob_cin_slow:
-			a_fail = "M1-α 地面小怪同步重粉减速失败"
+			a_fail = "M1-α 地面小怪重粉减速或防下沉失败"
 		elif single_tank_climb < 78.0 or single_tank_climb > 135.0:
 			a_fail = "M1-α 单管浮空爬高越界（%.1f 格，目标 78..135）" % single_tank_climb
 		elif not fall_regen_ok:
 			a_fail = "M1-α 延迟下落慢充异常（tap=%.1f delay=%.1f fall=%.1f）" % [lev_after_tap, lev_at_delay, lev_after_fall]
 		elif not no_inf_flight:
 			a_fail = "M1-α 防无限飞断言失败（drop=%.1f lev=%.1f）" % [tap_drop_cells, player.levitate]
-		elif not high_counter_ok or not saw_flinch or not saw_escape:
-			a_fail = "M1-α 旱魃空间AI异常（high=%s flinch=%s escape=%s）" % [str(high_counter_ok), str(saw_flinch), str(saw_escape)]
+		elif not boss_dmg_raised or not high_counter_ok or not saw_avoid_water or not saw_flinch or not saw_escape:
+			a_fail = "M1-α 旱魃高伤/畏水AI异常（dmg=%s high=%s avoid=%s flinch=%s escape=%s）" % [
+				str(boss_dmg_raised), str(high_counter_ok), str(saw_avoid_water), str(saw_flinch), str(saw_escape)
+			]
 		else:
-			print("T4B_SMOKE_STEP M1-α三项打磨 wade=%.1f>%.1f>%.1f mob_slow=ok climb=%.1f fall_regen=+%.1f no_inf=ok boss_smart=ok" % [
+			print("T4B_SMOKE_STEP M1-α复测打磨 no_sink=ok surf=%.1f>%.1f>%.1f mob_slow=ok climb=%.1f fall_regen=+%.1f boss_fear_water=ok" % [
 				wades[0], wades[1], wades[2], single_tank_climb, lev_after_fall - lev_at_delay
 			])
 		if a_fail != "":
